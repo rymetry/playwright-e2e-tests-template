@@ -153,7 +153,7 @@ Then:
 | Qualification command / procedure | `npm run test:qualify -- --grep "E2E-DEMO-001-PW-01" --project=chromium` |
 | Qualification result | 3 passed / 3 runs（retry・skip・fixme・flaky・interruptedなし） |
 | 実行条件 | origin `https://playwright.dev`、Playwright 1.62.0（同梱Chromium）、Project `chromium` |
-| 対象revision | `759e5ed`＋最終レビュー修正の作業ツリー（コミット時にSHAへ更新する） |
+| 対象revision | `72f058c`（Qualification実行時のspec・configは本commitの内容と同一） |
 | 証跡 | 本表の記録が一次証跡。補助: `qualification-reports/2026-07-29_12-19-21-234_E2E-DEMO-001-PW-01/`（2026-07-29 21:19 JST実行。フォルダ名はUTC、ローカル限定で消失しうる） |
 
 #### 対象外・未確定

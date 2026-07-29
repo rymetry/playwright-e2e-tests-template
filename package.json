@@ -1,0 +1,27 @@
+{
+  "name": "playwright-e2e-tests-template",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test --grep-invert @quarantine",
+    "test:headed": "playwright test --grep-invert @quarantine --headed",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "node scripts/check-consistency.mjs",
+    "test:smoke": "playwright test --grep @smoke --grep-invert @quarantine",
+    "test:qualify": "E2E_QUALIFY=1 playwright test --repeat-each=3 --retries=0 --workers=1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^26.1.2",
+    "dotenv": "^17.4.2",
+    "typescript": "^7.0.2"
+  }
+}

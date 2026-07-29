@@ -1,0 +1,40 @@
+{
+  // このファイルの詳細は https://aka.ms/tsconfig を参照
+  "compilerOptions": {
+    // 実行環境
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "target": "esnext",
+    "lib": ["esnext", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    // 出力設定
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    // より厳格な型チェック
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // コード品質設定
+    // "noImplicitReturns": true,
+    // "noImplicitOverride": true,
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
+    // "noFallthroughCasesInSwitch": true,
+    // "noPropertyAccessFromIndexSignature": true,
+
+    // 推奨設定
+    "strict": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+  },
+  "include": [
+    "playwright.config.ts",
+    "e2e/**/*.ts"
+  ]
+}

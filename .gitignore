@@ -1,0 +1,31 @@
+.DS_Store
+node_modules/
+
+# Playwright Test artifacts
+test-results/
+playwright-report/
+blob-report/
+# Qualificationレポート（ローカル限定の補助資料。一次証跡はDesign Doc本文）
+qualification-reports/
+
+# Playwright runtime and authentication state
+playwright/.cache/
+playwright/.auth/*
+!playwright/.auth/.gitignore
+.playwright/profiles/
+.playwright/artifacts/
+.playwright-cli/
+profiles/
+.artifacts/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Generated Playwright CLI skills
+.agents/skills/playwright-cli/
+.claude/skills/playwright-cli/
+
+# Logs
+*.log

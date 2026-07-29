@@ -152,8 +152,8 @@ Then:
 | 項目 | 値 |
 |---|---|
 | Playwright Project | `chromium`、またはプロジェクト固有の値 |
-| Tierタグ | `@smoke` など。テストタイトルまたはtagで付与する |
-| QUARANTINE時 | テストタイトルに`@quarantine`を付与し、通常実行から除外する |
+| Tierタグ | SMOKEは`{ tag: '@smoke' }`オプションで付与。非SMOKEは現状タグなし（README 7章のトリガー発生まで`@regression`等は導入しない） |
+| QUARANTINE時 | `{ tag: '@quarantine' }`を付与し、通常実行から除外する |
 | 最大待機時間 | Playwright既定値、またはケース固有の上限 |
 | ポーリング | 対象外、または完了条件と間隔 |
 | retry | 通常実行はrepository設定に従い、qualificationでは`0` |

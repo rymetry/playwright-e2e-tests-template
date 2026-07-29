@@ -4,6 +4,10 @@
 自動テスト（Playwright）だけでなく、Computer Useによる画面操作テスト、人による
 Manualテストも同じ体系で設計・管理する。
 
+本書はDocの書き方に留まらず、Status管理・Qualification・QUARANTINE運用・
+スイート拡張方針・コード実装方針を含む、**テスト運用全体の管理ガイド**として
+機能する。ルールの正はすべて本書に置き、他のドキュメントからは参照のみ行う。
+
 想定する運用モデルは「AIエージェントがTest Design Docとテストを作成し、
 人間が期待値をレビューして承認する」である。本書のレビュー関連の規則は、
 AIの観測・生成物を無審査で正式な期待値にしないための関所として機能する。
@@ -87,7 +91,9 @@ NNは2桁ゼロ埋め連番。例: `E2E-AUTH-001-PW-01`、`INT-ORDER-003-API-02`
 | REGRESSION | 主要機能の回帰確認 | 日次または PR マージ時 |
 | EXTENDED | 網羅性重視の低頻度確認（VRT全画面、周辺系など） | 週次またはリリース前 |
 
-Playwrightではタグ（`@smoke` など）でTierを表現し、`--grep @smoke` で選別する。
+Playwrightでは`{ tag: '@smoke' }`オプション（公式推奨の方式）でTierを表現し、
+`--grep @smoke`で選別する。タグはtest単位で付与し、`test.describe`単位の
+一括付与は使わない（整合チェッカーの検出対象外のため）。
 CU／MN CheckのTierは実行計画（いつ誰が実行するか）の管理に使う。
 
 ## 4. Statusライフサイクル
@@ -170,8 +176,8 @@ Qualificationを再実施する。
 
 **PW／API Check:**
 
-- CheckをQUARANTINEへ変更したら、対応するテストのタイトルに`@quarantine`
-  タグを付与する。skip、fixme、コメントアウトは使わない。
+- CheckをQUARANTINEへ変更したら、対応するテストに`{ tag: '@quarantine' }`
+  オプションでタグを付与する。skip、fixme、コメントアウトは使わない。
 - 通常実行のscript（`test`、`test:smoke`など）は`--grep-invert @quarantine`で
   QUARANTINE Checkを自動的に除外する（`package.json`に設定済み）。
 - `test:ui`は調査・デバッグ用の例外であり、Playwright設定で収集される
@@ -252,6 +258,8 @@ Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/comma
 1. **軸を混ぜない。** タグ体系には役割の異なる軸があり、それぞれ表現手段が
    決まっている。
    - Tier（実行頻度・重要度）: タグ。1テストにちょうど1つ
+     （`@regression`／`@extended`導入後の契約。現状は`@smoke`のみを
+     タグ付けし、非SMOKEは無タグとする）
    - 運用状態: `@quarantine`の有無
    - 機能領域: タグを作らず、Check IDでgrepする
      （例: `npm test -- --grep "E2E-AUTH-"`で領域スイート、
@@ -269,6 +277,32 @@ Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/comma
 | タグが4種を超えた | READMEにタグレジストリ（タグ名／意味／消費するscript）を追加し、以後は登録制にする |
 | スイート間でブラウザ・baseURL・認証状態等の設定が分岐した | npm scriptsのgrepからPlaywright Projectsへ移行する |
 | CU／MANUAL Checkが増えた | 整合チェッカーのDocパース処理を再利用し、実行計画（Status=ACTIVEかつ対象TierのCheckリスト）を生成するスクリプトを追加する |
+| `test.describe`単位のタグ付けが必要になった | チェッカーのspec自前パースをやめ、`PLAYWRIGHT_JSON_OUTPUT_NAME=<file> npx playwright test --list --reporter=json` が返す実効タグ（describe継承の解決済み。`@`なし表記、stdoutはdotenvの出力で汚れるためファイル出力を使う）の読み取りへ切り替える。静的チェックでなくなる点に留意 |
 
 現状（`@smoke`と`@quarantine`のみ、`npm test`が事実上のregression）は
 この方針に対して不足のない状態であり、上記トリガーの発生までは何も追加しない。
+
+## 8. コード実装方針（POM・再利用機構）
+
+specは**インライン実装を既定**とする。セマンティックLocator（role・label・
+test ID）を実行契約で必須化しているため、Page Object Model（POM）が歴史的に
+解決してきたセレクタ一元管理の必要性は小さい。また、インラインのspecは
+Design Docとの突合（人間のレビュー）を1ファイルで完結させる。
+
+再利用機構は、次のトリガーが実際に発生した時点で導入する。
+
+| トリガー | 導入するもの |
+|---|---|
+| 2本目のspecが同じ認証・セットアップを必要とした | Playwright fixtures（ログイン済みpage等。公式がhookより推奨する再利用機構） |
+| 同じ画面操作のコードが3箇所に現れた | `e2e/<area>/helpers.ts` のプレーン関数（クラス化しない） |
+| 1つの画面に対するCheckが5件を超えた、またはその画面のhelperが肥大した | **その画面だけ**POMクラス化する。POMはスイート全体の方針ではなく画面単位の意思決定とし、単純な画面はインラインのままでよい |
+
+移行の安全網: POM化・helper抽出はspec変更にあたるため、4.2の再Qualification
+と`npm run check`が自動的に適用される。移行作業はAIが実施できるため、
+「後からのリファクタリングは実行されない」という初日POM導入の伝統的な論拠は
+この運用モデルでは成立しない。
+
+参考: Playwright公式はPOMを「大規模スイートの構造化手法」として条件付きで
+紹介しており（必須ではない）、Best Practicesの柱はuser-facing属性のLocatorと
+テスト独立性である。fixturesとPOMは補完関係（fixtureでPage Objectを供給する
+統合例が公式にある）。

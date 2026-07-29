@@ -16,15 +16,19 @@
  *   Step 4. 結果を出力し、問題が1件でもあればexit 1で終了する
  *
  * チェックルール一覧:
- *   No.1 Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>-<MODE>-<NN>）に従っている
+ *   No.1 Parent Case ID・Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>[-<MODE>-<NN>]）に従っている
  *   No.2 Check IDが全Docを通して重複していない
  *   No.3 Check一覧のStatusが正しい値で、Docファイル名がParent Case IDで始まる
  *   No.4 Check一覧のStatusと、各Checkの「Test Status判定根拠」表の判定が一致する
  *   No.5 PW/API CheckはStatusに応じてspecが存在する（EVALUATING以上=必須、RETIRED=禁止）
- *   No.6 Status=QUARANTINEとspecタイトルの@quarantineタグが両方向で一致する
- *   No.7 Tier=SMOKEとspecタイトルの@smokeタグが両方向で一致する
+ *   No.6 Status=QUARANTINEとテストの@quarantineタグが両方向で一致する
+ *   No.7 Tier=SMOKEとテストの@smokeタグが両方向で一致する
  *   No.8 CU/MN CheckのIDがspecに存在しない（自動実行対象ではないため）
  *   No.9 specの全タイトルがCheck IDで始まり、そのIDがいずれかのDocに存在する
+ *
+ * タグ（No.6・No.7）は `{ tag: '@smoke' }` オプション（公式推奨）と
+ * タイトル内埋め込みの両方を検出する。ただしtest()直下のみ対応し、
+ * test.describe()単位の一括タグ付けは検出対象外（規約: タグはtest単位で付与する）。
  */
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
@@ -35,6 +39,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 // test-designs/README.md 2章の命名規則と対応する正規表現
+const PARENT_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}$/;
 const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}$/;
 // 行内からCheck IDらしき文字列を拾うための緩い版（specタイトル検索用）
 const CHECK_ID_LOOSE = /(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}/;
@@ -161,14 +166,28 @@ function parseSpecTitles(filePath) {
   const content = readFileSync(filePath, 'utf8');
   const titles = [];
 
-  const testCallPattern = /\btest(?:\.(?:only|fixme|fail|skip|slow))?\s*\(\s*(['"`])([\s\S]*?)\1/g;
+  // タイトルに続くtest details object（{ tag: '@smoke' } 等）も任意で取り込む。
+  // - タイトル部はエスケープされた引用符（\'等）を終端と誤認しない
+  // - details objectは入れ子1段（{ annotation: { ... }, tag: '@smoke' } 等）まで
+  //   対応する。プロパティの記述順に依存しない
+  const testCallPattern =
+    /\btest(?:\.(?:only|fixme|fail|skip|slow))?\s*\(\s*(['"`])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*(?:,\s*(\{(?:[^{}]|\{[^{}]*\})*\}))?/g;
+  // タグ名は完全なトークンで抽出する（@smoke-fastから@smokeを誤抽出しない）
+  const TAG_TOKEN = /@[a-z][a-z0-9-]*/g;
   for (const match of content.matchAll(testCallPattern)) {
     const title = match[2] ?? '';
+    const details = match[3] ?? '';
+    // tagオプションの値は文字列（'@smoke'）と配列（['@a', '@b']）の両形式に対応
+    const tagOption = details.match(/\btag\s*:\s*(\[[^\]]*\]|(['"`])@[^'"`]+\2)/)?.[1] ?? '';
     titles.push({
       file: filePath,
       title,
       checkId: title.match(CHECK_ID_LOOSE)?.[0], // タイトル内のCheck ID（なければundefined）
-      tags: new Set(title.match(/@[a-z]+/g) ?? []), // @smoke、@quarantine等
+      // tagオプションとタイトル埋め込みの両方から@smoke、@quarantine等を集約
+      tags: new Set([
+        ...(title.match(TAG_TOKEN) ?? []),
+        ...(tagOption.match(TAG_TOKEN) ?? []),
+      ]),
     });
   }
   return titles;
@@ -211,6 +230,12 @@ function main() {
 
     if (doc.parentCaseId === undefined) {
       report(docPath, 'メタデータ表にParent Case IDが見つかりません');
+      continue;
+    }
+
+    // ルールNo.1（前半）: Parent Case ID自体の形式
+    if (!PARENT_ID_PATTERN.test(doc.parentCaseId)) {
+      report(docPath, `Parent Case ID「${doc.parentCaseId}」が命名規則に従っていません`);
       continue;
     }
 
@@ -280,7 +305,7 @@ function main() {
 
       // ルールNo.6: QUARANTINEと@quarantineタグの両方向一致
       if (check.status === 'QUARANTINE' && !spec.tags.has('@quarantine')) {
-        report(rel(spec.file), `QUARANTINE中の「${check.id}」のタイトルに@quarantineタグがありません`);
+        report(rel(spec.file), `QUARANTINE中の「${check.id}」のテストに@quarantineタグがありません`);
       }
       if (check.status !== 'QUARANTINE' && spec.tags.has('@quarantine')) {
         report(rel(spec.file), `「${check.id}」に@quarantineタグがありますが、DocのStatusは${check.status}です`);
@@ -288,7 +313,7 @@ function main() {
 
       // ルールNo.7: SMOKE Tierと@smokeタグの両方向一致
       if (check.tier === 'SMOKE' && !spec.tags.has('@smoke')) {
-        report(rel(spec.file), `SMOKE Tierの「${check.id}」のタイトルに@smokeタグがありません`);
+        report(rel(spec.file), `SMOKE Tierの「${check.id}」のテストに@smokeタグがありません`);
       }
       if (check.tier !== 'SMOKE' && spec.tags.has('@smoke')) {
         report(rel(spec.file), `「${check.id}」に@smokeタグがありますが、DocのTierは${check.tier}です`);

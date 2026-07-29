@@ -102,11 +102,12 @@ function resolveQualifyReportDir(): string | undefined {
     );
   }
 
+  // ミリ秒まで含め、同一秒内の実行によるフォルダ名衝突の可能性を低減する
   const timestamp = new Date()
     .toISOString()
     .replace(/[:.]/g, '-')
     .replace('T', '_')
-    .slice(0, 19);
+    .slice(0, 23);
   const reportDir = `qualification-reports/${timestamp}_${checkId}`;
 
   console.log(`Qualification report: ${reportDir}`);

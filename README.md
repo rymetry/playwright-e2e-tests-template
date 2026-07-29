@@ -8,7 +8,8 @@ Test Design Doc体系で設計・管理する。
 
 1. リポジトリをコピーし、`git init` でGit管理を開始する
    （Design Docを永続記録として運用するための前提）
-2. `package.json` の `name` をプロジェクト名に変更する
+2. `package.json` の `name` をプロジェクト名に変更し、`SECURITY.md` の
+   報告先URLを自リポジトリのSecurity Advisoriesへ変更する
 3. `cp .env.example .env` し、`E2E_BASE_URL` と `E2E_ALLOWED_ORIGINS` を
    対象環境に合わせる（本番環境をallowlistへ入れない）
 4. [test-designs/README.md](test-designs/README.md) 2.4のAreaレジストリに
@@ -16,9 +17,13 @@ Test Design Doc体系で設計・管理する。
 5. サンプル一式を削除する: `test-designs/e2e/demo/`、`e2e/demo/`、
    AreaレジストリのDEMO行（書き方の参考として残してもよい）
 6. `test-designs/_archive/`（旧テンプレート）が残っていれば削除する
-7. `npm run check` と `npm test` が通ることを確認する
+7. `npm run check` と `npm run typecheck` が通ることを確認する
+   （`npm test` はサンプル削除直後はテスト0件で失敗するため、
+   最初の実ケースを作成した後に確認する）
 
 ## セットアップ
+
+前提: Node.js 20以上（Playwrightの要求バージョン）
 
 ```bash
 npm install
@@ -62,7 +67,8 @@ cp .env.example .env
 他のAIエージェント向けに同内容を [.agents/commands/](.agents/commands/) にも
 配置している（両者は常に同期させること）。
 
-- 管理ルール（ID命名規則、Tier、Status、昇格条件）: [test-designs/README.md](test-designs/README.md)
+- 管理ルール（ID命名規則、Tier、Status、昇格条件、スイート拡張方針、
+  コード実装方針〔インライン既定・POMはトリガー駆動〕）: [test-designs/README.md](test-designs/README.md)
 - Design Docテンプレート: [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md)
 - 完成例: [test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md](test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md) と [e2e/demo/E2E-DEMO-001.spec.ts](e2e/demo/E2E-DEMO-001.spec.ts)
 
@@ -70,7 +76,7 @@ cp .env.example .env
 
 ```
 test-designs/
-  README.md              … 管理ルール（ID命名規則、Status、Qualification、拡張方針）
+  README.md              … 管理ルール（ID命名規則、Status、Qualification、拡張・実装方針）
   templates/             … Design Docテンプレート
   e2e/<area>/            … E2EレベルのDesign Doc
   int/<area>/            … IntegrationレベルのDesign Doc

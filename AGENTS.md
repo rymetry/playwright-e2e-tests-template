@@ -11,7 +11,8 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 ## 必読ドキュメント
 
 - [test-designs/README.md](test-designs/README.md) — ID命名規則、Status、
-  Qualification、安全規則、運用フロー（2パターン）
+  Qualification、安全規則、運用フロー（2パターン）、スイート拡張方針、
+  コード実装方針（インライン既定・POMはトリガー駆動）
 - [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md) — Docテンプレート
 
 ## 定型手順

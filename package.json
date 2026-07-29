@@ -6,7 +6,10 @@
   "main": "index.js",
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "test": "playwright test --grep-invert @quarantine",

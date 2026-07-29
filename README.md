@@ -56,7 +56,9 @@ cp .env.example .env
 
 ## テスト設計
 
-テストは必ずTest Design Docを起点に作成する。
+テストは必ずTest Design Docを起点に作成する。Claude Codeでは
+`/test-design <AREA> <概要>`（Doc作成）と `/explore <Check ID>`（探索と観測記録）の
+スラッシュコマンド（[.claude/commands/](.claude/commands/)）が使える。
 
 - 管理ルール（ID命名規則、Tier、Status、昇格条件）: [test-designs/README.md](test-designs/README.md)
 - Design Docテンプレート: [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md)

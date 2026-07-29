@@ -212,13 +212,35 @@ Qualificationを再実施する。
 
 ## 6. 運用フロー
 
-1. `templates/test-design-doc-template.md` を
-   `test-designs/<level>/<area>/<ID>-<slug>.md` へコピーする
-2. ID・機能名・Checkを記入し、使わないExecution modeのCheckブロックを削除する
-3. 必要なら探索（Playwright CLI／Computer Use／Manual）を行い、観測事実を記録する
-4. 期待値レビューを受け、レビュー済みの期待値を確定する
-5. テストまたは手順を実装し、StatusをEVALUATINGへ変更する
-6. Qualificationを実施し、条件を満たしたらACTIVEへ変更する
+Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/commands/`）で
+実行できる。機能の理解度に応じて2パターンを使い分ける。
+**どちらもDoc（ID採番）が先**であり、探索結果は常にDocへ着地する。
+
+**パターン1: 機能・仕様がわかっている場合**
+
+1. Doc作成（目的・シナリオ・期待値案まで記入。根拠のない期待値は書かない）
+2. 探索で到達経路・Locator候補・待機条件を確認し、観測事実を記録する
+3. 観測を踏まえDocを修正する
+4. 期待値レビュー（人間）: Docと仕様の突合。根拠欄に仕様・Issue等を記録する
+5. 実装しStatusをEVALUATINGへ → Qualification → ACTIVE
+
+**パターン2: 機能がわからない場合**
+
+1. Doc骨格作成（ID採番＋機能名＋探索目的のみ。DRAFT中はslug変更可、IDは不変）
+2. 探索し、観測事実を記録する
+3. 観測をもとにDocを本記入する
+4. 期待値レビュー（人間）: **観測された挙動が意図された挙動かを確認する**。
+   観測をそのまま期待値にすると、バグまで仕様として固定されるため、
+   このパターンではレビューの重要度が上がる。根拠欄に「観測＋意図確認」の旨を
+   記録する
+5. 実装しStatusをEVALUATINGへ → Qualification → ACTIVE
+
+**探索の保存先規約**
+
+- 生成物（screenshot等）は `.playwright/artifacts/<Run ID>/` へ置く（Git管理外）。
+  Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式
+- DocのArtifacts欄にはRun IDと必要最小限の相対pathだけを記録する
+- 探索結果は「探索で確認した事実」節にのみ書き、期待値欄には書かない
 
 完成例として、`test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md` と
 対応する `e2e/demo/E2E-DEMO-001.spec.ts` を参照できる。

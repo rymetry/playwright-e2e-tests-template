@@ -15,6 +15,7 @@ playwright/.auth/*
 .playwright/profiles/
 .playwright/artifacts/
 .playwright-cli/
+/playwright-cli/
 profiles/
 .artifacts/
 
@@ -23,9 +24,8 @@ profiles/
 .env.*
 !.env.example
 
-# Generated Playwright CLI skills
-.agents/skills/playwright-cli/
-.claude/skills/playwright-cli/
+# Claude Code personal settings (do not commit)
+.claude/settings.local.json
 
 # Logs
 *.log

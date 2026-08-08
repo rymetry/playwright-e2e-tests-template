@@ -7,10 +7,6 @@
     "target": "esnext",
     "lib": ["esnext", "DOM", "DOM.Iterable"],
     "types": ["node"],
-    // 出力設定
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
     // より厳格な型チェック
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

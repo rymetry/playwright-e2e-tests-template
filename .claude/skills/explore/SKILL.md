@@ -1,6 +1,8 @@
 ---
+name: explore
 description: playwright-cli skillで対象のPW Checkを探索し、結果をTest Design Docの「探索で確認した事実」へ記録する
-argument-hint: <Check ID> [探索対象の補足]
+argument-hint: "<Check ID> [探索対象の補足]"
+disable-model-invocation: true
 ---
 
 Test Design Docに基づく探索を実行する。引数: $ARGUMENTS

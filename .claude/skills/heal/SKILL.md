@@ -1,6 +1,9 @@
 ---
+name: heal
 description: 失敗したテストを証跡ベースで分類し、テスト資産の劣化（Locator・待機条件・テストデータ）に限り修正を提案、承認後に適用して再Qualificationまで行う
-argument-hint: [Check ID...] [失敗状況の補足]
+argument-hint: "[Check ID...] [失敗状況の補足]"
+disable-model-invocation: true
+allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run typecheck) Bash(npm run test:qualify *) Bash(git status)
 ---
 
 テスト失敗の分類と修復を実行する。引数: $ARGUMENTS

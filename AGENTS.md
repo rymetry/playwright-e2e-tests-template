@@ -18,13 +18,15 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 
 ## 定型手順
 
-Claude Codeではスラッシュコマンド、他のエージェントでは手順書として同じ
-ファイルに従う。
+Claude Codeではスラッシュコマンド（スキル）、他のエージェントでは手順書として
+**同じファイル**に従う（ミラーなし・単一ソース）。ファイル冒頭のYAML
+frontmatterはClaude Code向けのメタデータであり、他のエージェントは無視して
+本文の手順に従えばよい。
 
-- **Test Design Doc作成**: [.agents/commands/test-design.md](.agents/commands/test-design.md) の手順に従う
-- **探索**: [.agents/commands/explore.md](.agents/commands/explore.md) の手順に従う
-  （browser操作は `.agents/skills/playwright-cli/` のskillを使用）
-- **失敗の分類・修復**: [.agents/commands/heal.md](.agents/commands/heal.md) の手順に従う
+- **Test Design Doc作成**: [.claude/skills/test-design/SKILL.md](.claude/skills/test-design/SKILL.md) の手順に従う
+- **探索**: [.claude/skills/explore/SKILL.md](.claude/skills/explore/SKILL.md) の手順に従う
+  （browser操作は [.claude/skills/playwright-cli/](.claude/skills/playwright-cli/) のskillを使用）
+- **失敗の分類・修復**: [.claude/skills/heal/SKILL.md](.claude/skills/heal/SKILL.md) の手順に従う
   （修正の適用はユーザー承認後のみ。禁止変更はREADME 6.1が正）
 
 ## 検証コマンド

@@ -62,10 +62,11 @@ cp .env.example .env
 ## テスト設計
 
 テストは必ずTest Design Docを起点に作成する。Claude Codeでは
-`/test-design <AREA> <概要>`（Doc作成）と `/explore <Check ID>`（探索と観測記録）の
-スラッシュコマンド（[.claude/commands/](.claude/commands/)）が使える。
-他のAIエージェント向けに同内容を [.agents/commands/](.agents/commands/) にも
-配置している（両者は常に同期させること）。
+`/test-design <AREA> <概要>`（Doc作成）、`/explore <Check ID>`（探索と観測記録）、
+`/heal`（失敗の分類・修復）のスキル（[.claude/skills/](.claude/skills/)）が使える。
+他のAIエージェント（Codex等）はAGENTS.mdを起点に**同じSKILL.mdファイル**を
+手順書として参照する（ミラーなし・単一ソース。frontmatterはClaude Code向けの
+メタデータで、他エージェントは本文に従えばよい）。
 
 - 管理ルール（ID命名規則、Tier、Status、昇格条件、スイート拡張方針、
   コード実装方針〔インライン既定・POMはトリガー駆動〕）: [test-designs/README.md](test-designs/README.md)

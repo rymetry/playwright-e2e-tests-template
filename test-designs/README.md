@@ -222,7 +222,7 @@ Qualificationを再実施する。
 
 ## 6. 運用フロー
 
-Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/commands/`）で
+Doc作成は `/test-design`、探索は `/explore` スキル（`.claude/skills/`）で
 実行できる。機能の理解度に応じて2パターンを使い分ける。
 **どちらもDoc（ID採番）が先**であり、探索結果は常にDocへ着地する。
 
@@ -259,7 +259,7 @@ Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/comma
 
 ### 6.1 失敗時の修復フロー（ヒール）
 
-テスト失敗の調査と修復は `/heal` コマンド（`.claude/commands/heal.md`）で行う。
+テスト失敗の調査と修復は `/heal` スキル（`.claude/skills/heal/SKILL.md`）で行う。
 ヒールは実行時の自己修復ではなく**保守時のワークフロー**であり、次の順で進む。
 
 1. 失敗の収集（直近実行の全失敗）と証跡確保。元の失敗記録は上書き・削除しない

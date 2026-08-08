@@ -1,6 +1,8 @@
 ---
+name: test-design
 description: Test Design Docを命名規則に従って新規作成する（ID採番・テンプレート展開・整合チェックまで）
-argument-hint: <AREA> <シナリオ概要> [--level E2E|INT] [--skeleton]
+argument-hint: "<AREA> <シナリオ概要> [--level E2E|INT] [--skeleton]"
+disable-model-invocation: true
 ---
 
 Test Design Docを新規作成する。引数: $ARGUMENTS

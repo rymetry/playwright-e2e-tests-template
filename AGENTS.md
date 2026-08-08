@@ -18,20 +18,42 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 
 ## 定型手順
 
-Claude Codeではスラッシュコマンド（スキル）、他のエージェントでは手順書として
-**同じファイル**に従う（ミラーなし・単一ソース）。ファイル冒頭のYAML
-frontmatterはClaude Code向けのメタデータであり、他のエージェントは無視して
-本文の手順に従えばよい。
+4 skillのhost中立な正本は `skills/<name>/` に置く。Claude Codeは
+`.claude/skills/<name>`、Codexは `.agents/skills/<name>` の相対directory symlinkから
+**同じ正本**を発見する。複製したミラーは作らず、変更は `skills/` だけに行う。
+正本のYAML frontmatterにClaude Code拡張を、同じ正本配下の
+`agents/openai.yaml` にOpenAI metadataを置き、本文はhost中立に保つ。
 
-- **Test Design Doc作成**: [.claude/skills/test-design/SKILL.md](.claude/skills/test-design/SKILL.md) の手順に従う
-- **探索**: [.claude/skills/explore/SKILL.md](.claude/skills/explore/SKILL.md) の手順に従う
-  （browser操作は [.claude/skills/playwright-cli/](.claude/skills/playwright-cli/) のskillを使用）
-- **失敗の分類・修復**: [.claude/skills/heal/SKILL.md](.claude/skills/heal/SKILL.md) の手順に従う
-  （修正の適用はユーザー承認後のみ。禁止変更はREADME 6.1が正）
+| Workflow / skill | Claude Code | Codex CLI／IDE／Desktop | ChatGPT |
+|---|---|---|---|
+| Test Design Doc作成 | `/test-design <AREA> <概要>` | `$test-design <AREA> <概要>`（または`/skills`から選択） | `@test-design <AREA> <概要>` |
+| 探索 | `/explore <Check ID>` | `$explore <Check ID>`（または`/skills`から選択） | `@explore <Check ID>` |
+| 失敗の分類・修復 | `/heal` | `$heal`（または`/skills`から選択） | `@heal` |
+| browser操作 | `/playwright-cli` | `$playwright-cli`（または`/skills`から選択） | `@playwright-cli` |
+
+Claude CodeとCodexはrepository checkoutからproject skillを発見する。ChatGPTでの
+`@skill` 起動には、同じskill packageをChatGPT側へ別途install／enableしておく必要が
+あり、checkoutだけでは登録されない。
+
+- **Test Design Doc作成**: [skills/test-design/SKILL.md](skills/test-design/SKILL.md)
+- **探索**: [skills/explore/SKILL.md](skills/explore/SKILL.md)
+  （browser操作は [skills/playwright-cli/](skills/playwright-cli/) を使用）
+- **失敗の分類・修復**: [skills/heal/SKILL.md](skills/heal/SKILL.md)
+  （修正の適用はProposal IDを指定した明示起動後のみ。禁止変更はREADME 6.1が正）
+
+healの再観測handoffを受けたら、`--resume <Handoff ID>` まで同じ会話を維持し、
+commitやbranch変更を行わない。変更した場合は既存handoffを再開せず、新しいhandoffから
+再観測する。
+
+workflowは最初にGit repository rootを取得し、pathとcommandをそこへanchorする。
+subdirectoryから起動してもよいが、Git管理外では開始しない。playwright-cliの
+`references/test-generation.md` にある汎用plan／generate／healは使用せず、上記の
+repository固有workflowと `test-designs/README.md` を優先する。
 
 ## 検証コマンド
 
-- `npm run check` — Design Docとspecの整合チェック（Status・タグ・命名規則）
+- `npm run check` — Design Doc／spec整合と両hostのskill構造を検査
+- `npm run check:skills` — skill構造だけを検査
 - `npm run typecheck` — TypeScript型検査
 - `npm test` — 通常実行（QUARANTINE除外）
 

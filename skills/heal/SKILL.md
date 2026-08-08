@@ -1,30 +1,38 @@
 ---
 name: heal
 description: 失敗したテストを証跡ベースで分類し、テスト資産の劣化（Locator・待機条件・テストデータ）に限り修正を提案、承認後に適用して再Qualificationまで行う
-argument-hint: "[Check ID...] [失敗状況の補足]"
+argument-hint: "[Check ID...] [失敗状況] | --resume <Handoff ID> | --apply <Proposal ID>"
 disable-model-invocation: true
-allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run typecheck) Bash(npm run test:qualify *) Bash(git status)
 ---
 
-テスト失敗の分類と修復を実行する。引数: $ARGUMENTS
+テスト失敗の分類と修復を実行する。ユーザーがこのskillの起動時に指定した入力を、
+以下の「入力」として扱う。ホスト別の明示起動方法は `AGENTS.md` を参照する。
+
+## Repository root（必須）
+
+最初に `git rev-parse --show-toplevel` でGit repository rootを取得する。取得できない
+場合は開始せず停止する。以後、相対pathはすべてrepository root基準で解決し、
+shell commandもrepository rootをworking directoryとして実行する。
 
 ## 原則（すべての手順に優先する不変条件）
 
 1. **分類が先、修復は後。** 分類が確定するまでspec・Docを一切変更しない
-2. **修正は必ず提案 → ユーザー承認 → 適用の順で行う**（自己修復をしない）。
-   承認前にspec・Docを変更しない。**唯一の例外**は手順3で起動する `/explore` が
-   行う「探索で確認した事実」節・Exploration mode列への観測記録、および
-   探索目的が空の場合に `/explore` がユーザー確認のうえ行う「探索目的」の記入
-   （いずれも観測・スコープの記録であり、期待値・テスト資産の変更ではないため）
+2. **修正は必ず提案 → ユーザーの明示承認 → 適用の順で行う**（自己修復をしない）。
+   承認前にspec・Docを変更しない。**唯一の例外**は、手順3のhandoff後にユーザーが
+   明示起動した [explore skill](../explore/SKILL.md) が行う「探索で確認した事実」節・
+   Exploration mode列への観測記録、および探索目的が空の場合にユーザー確認のうえ
+   行う「探索目的」の記入（いずれも観測・スコープの記録であり、期待値・
+   テスト資産の変更ではないため）
 3. 自分で修正してよいのは **(a) Locator (b) 待機条件 (c) テストデータ準備**
    の3領域のみ。期待値・Assertion設計・シナリオ・3領域外のテスト実装に触れる
    変更は行わず、該当する既存フローを案内して停止する
 4. **元の失敗をPASSに書き換えない。** 失敗の記録・証跡は上書き・削除しない
    （再現実行の前に必ず退避する。手順1）。PASSは修正適用後の新しい
    Qualification（README 4.1）でのみ成立する
-5. **ブラウザでの再観測は `/explore` を起動して行う。** このコマンド自身は
-   playwright-cliを直接操作せず、Docの「探索で確認した事実」を直接書かない
-   （探索のPreflight・認証・origin・記録規則を継承するため）
+5. **ブラウザでの再観測は、ユーザーがexplore workflowを明示起動して行う。**
+   healはexploreを内部起動せず、その本文を代行せず、playwright-cliを直接操作せず、
+   Docの「探索で確認した事実」を直接書かない（探索のPreflight・認証・origin・
+   記録規則を継承するため）
 6. 分類に確信が持てない場合は修復せず、観測結果を報告して人間の判断を仰ぐ。
    プロダクトバグかテスト劣化か判別できない場合は**プロダクトバグ扱い（安全側）**
    とする
@@ -33,13 +41,17 @@ allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run 
 
 ## 対象の特定
 
-- **引数なしを基本形**とし、直近のテスト実行の失敗全件を対象とする。
+- **入力なしを基本形**とし、直近のテスト実行の失敗全件を対象とする。
   Check IDが渡された場合はその部分集合に限定する
+- `--resume <Handoff ID>` は手順3のexplore handoffからの再開専用、
+  `--apply <Proposal ID>` は手順4で承認した提案の適用専用とする。各modeは排他的で、
+  IDの欠落・通常入力との混在・同じ会話内で照合できないIDがある場合は停止する。
+  通常modeへ暗黙にfallbackしない
 - 対象はPW／API Check（コード資産を持つCheck）のみ。CU／MN Checkの失敗が
   含まれる場合は、手順の改訂はDoc改訂＋期待値レビューのフローで行う旨を
   案内し、そのCheckは対象外として報告する
 - **API Checkの修復は、観測を要しないテストデータ不備のみ**を対象とする。
-  それ以外のヒール対象分類は、APIの再観測手順が未定義のため（`/explore` は
+  それ以外のヒール対象分類は、APIの再観測手順が未定義のため（explore skillは
   API Checkを対象外とする）修復せず報告に留める
 - 対応するDesign Docが存在しないspecの失敗は修復対象から除外し、報告で
   指摘する（骨格先行ルール）。StatusがDRAFT／RETIREDのCheckも除外し、
@@ -47,9 +59,18 @@ allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run 
 
 ## Preflight
 
-1. `git status` を確認し、作業ツリーに未コミットの変更がある場合
-   （spec・Docに限らず、fixture・helper・設定など共有資産を含む）は
-   報告して指示を待つ（修復diffと既存の作業を混ぜない）
+1. 通常modeと`--apply` modeでは `git status` を確認し、作業ツリーに未コミットの
+   変更がある場合（spec・Docに限らず、fixture・helper・設定など共有資産を含む）は
+   報告して指示を待つ（修復diffと既存の作業を混ぜない）。`--apply` modeでは、
+   承認済みProposalの「適用前baseline」にpathとdiff hashが記録され、現在も完全一致
+   するexplore由来のDoc差分だけを例外とする
+2. `--resume` modeでは、handoff時のHEAD SHAと現在のHEADが一致し、作業ツリーの
+   変更がhandoff対象Docの「探索で確認した事実」、Check一覧のExploration mode、
+   およびユーザー確認済みの「探索目的」だけであることをdiffで確認する。spec・
+   fixture・helper・設定・他Check・期待値・Assertion・シナリオ等に変更がある、
+   または確認できない場合は停止する
+3. `--resume`／`--apply` modeは同じ会話内の未完了Handoff／Proposalだけを対象とし、
+   対応するID、対象Check、HEAD SHA、対象diffを照合できなければ停止する
 
 ## 手順
 
@@ -105,12 +126,24 @@ allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run 
 
 ### 3. 再観測と原因確定（ヒール対象クラスタのみ）
 
-- 「探索で確認した事実」の更新が必要な**Checkごとに `/explore` を起動**し、
-  現状のrole・accessible name・test ID・待機条件を確認する（Docへの観測記録は
-  `/explore` のみが行う。healが直接書かない。同一画面のCheckが複数ある場合も
-  Check IDごとに実行する）
+- 「探索で確認した事実」の更新が必要な場合、対象Checkごとにexplore workflowを
+  ユーザーが明示起動する必要がある。healは次を含むhandoffを提示して停止する:
+  Handoff ID、対象Checkとクラスタ、失敗証跡の参照先・実行日時、handoff時のHEAD
+  SHAとgit status、対象origin／build識別子（取得可能な場合）、Checkごとの探索目的、
+  explore完了後に使う `--resume <Handoff ID>` 入力、および再開まで同じ会話を維持し、
+  commit・branch変更を行わない注意。commitまたはbranch変更があった場合は既存handoffを
+  再開せず、新しいhandoffから再観測する。ホスト別の起動方法は `AGENTS.md` を参照する
+- 複数CheckはCheck IDごとにexplore workflowを明示起動する。heal自身がexploreを
+  内部起動したり、exploreの本文を直接読んで手順を代行したりしてはならない
+- `--resume` modeでは、元の失敗証跡が残っていることに加え、各Checkの観測記録が
+  失敗証跡とhandoffの両方より新しく、同じrevision・origin／buildを対象とし、
+  Tool/version・Browser・Session・Artifacts・観測日時が対象Checkと一致することを
+  確認する。exploreのPreflight、認証、allowlist、session cleanupに未解決事項がある、
+  または1項目でも確認できない場合は結果を使わず、新しいhandoffを提示して停止する
+- 再開後は観測結果を踏まえて分類を再評価する。意味的契約が変わっていれば
+  Locator修正へ進まず、「仕様変更」または「シナリオ誤り」へ分類し直して停止する
 - テストデータ不備で観測が不要な場合はこの手順を省略できる
-- API Checkはこの手順を実行できない（explore.mdの対象外）。観測を要する
+- API Checkはこの手順を実行できない（explore skillの対象外）。観測を要する
   API Checkの失敗は修復せず報告する（「対象の特定」参照）
 - Locator修正の前提として**意味的契約**を確認する。1つでも崩れていれば
   「仕様変更」または「シナリオ誤り」へ分類し直して停止する:
@@ -121,9 +154,11 @@ allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run 
 
 ### 4. 修正提案の提示と承認
 
-- クラスタ単位の提案として次を提示し、**ユーザーの承認を待つ**:
+- クラスタ単位の提案として次を提示し、Proposal IDを付けて停止する:
   分類、根拠（観測事実の列挙）、意味的契約の確認結果、対象Check一覧、
-  修正diff、禁止変更リストとの照合結果、再Qualificationの所要見込み
+  修正diff、禁止変更リストとの照合結果、再Qualificationの所要見込み。
+  explore handoffから再開した場合は、現在のexplore由来Doc差分について、対象pathと
+  exact diffのSHA-256を「適用前baseline（承認対象外）」として併記する
 - **fixture・helper等の共有資産への変更が含まれる場合**、その資産を利用する
   すべてのCheck（失敗していないCheckを含む）を影響一覧として明示する。
   共有資産で結合しているクラスタは分離せず**一括承認**とする
@@ -134,6 +169,10 @@ allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run 
   Status・「Test Status判定根拠」・Qualification記録の更新は本手順書の
   規定に基づく事務的更新であり、承認対象のdiffはテスト資産（spec・
   fixture等）の変更のみとする
+- ユーザーは承認するProposal IDを入力に指定してhealを明示起動する。exploreの
+  明示起動や`--resume`は修正承認ではない。`--apply` modeでは適用直前にProposalの
+  HEAD SHA・対象Check・提示diff・共有資産の影響範囲・適用前baselineのpathとdiff
+  hashを再照合し、変化があれば適用せず、新しいProposalを提示する
 
 ### 5. 適用とDoc整合（承認されたクラスタのみ）
 
@@ -143,7 +182,7 @@ allowed-tools: Bash(npm test) Bash(npm test *) Bash(npm run check) Bash(npm run 
   保ったまま**、生成・識別・cleanupを改善する範囲に限る（意味を変える修正は
   README 6.1 禁止12）
 - healが更新してよいDoc節は「Test Status判定根拠」と**Check一覧のStatus列のみ**
-  （「探索で確認した事実」は `/explore` 経由）。修正により「テストデータ」
+  （「探索で確認した事実」はexplore workflow経由）。修正により「テストデータ」
   「前処理」「Fixture」等の節と乖離が生じる場合は提案にその旨を含め、
   当該節の改訂は通常のDoc改訂フロー（人間レビュー）へ回す
 - 「Test Status判定根拠」には、ヒールによる修正である旨、分類、
@@ -205,8 +244,8 @@ specへの `{ tag: '@quarantine' }` 付与、Check一覧のStatus更新、
 ## 禁止事項
 
 - README 6.1「ヒールの禁止変更リスト」に挙げるすべての変更
-- ユーザー承認前のspec・Doc変更（例外は原則2に定める `/explore` の観測記録・
+- ユーザー承認前のspec・Doc変更（例外は原則2に定めるexploreの観測記録・
   探索目的の記入のみ）
-- playwright-cliの直接操作（再観測は必ず `/explore` を経由する）
+- playwright-cliの直接操作（再観測は必ずユーザーが明示起動したexploreを経由する）
 - 退避せずに再現実行して元の証跡を失わせること
 - 元の失敗の証跡・記録・Qualification記録の上書き・削除

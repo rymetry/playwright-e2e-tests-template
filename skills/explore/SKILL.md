@@ -5,22 +5,34 @@ argument-hint: "<Check ID> [探索対象の補足]"
 disable-model-invocation: true
 ---
 
-Test Design Docに基づく探索を実行する。引数: $ARGUMENTS
+Test Design Docに基づく探索を実行する。ユーザーがこのskillの起動時に指定した
+入力を、以下の「入力」として扱う。ホスト別の明示起動方法は `AGENTS.md` を
+参照する。
+
+## Repository root（必須）
+
+最初に `git rev-parse --show-toplevel` でGit repository rootを取得する。取得できない
+場合は開始せず停止する。以後、相対pathはすべてrepository root基準で解決し、
+shell commandもrepository rootをworking directoryとして実行する。
 
 ## 対象の特定
 
-- 引数は**PW CheckのCheck IDを原則とする**。Docパスが渡された場合、そのDocの
+- 入力は**PW CheckのCheck IDを原則とする**。Docパスが渡された場合、そのDocの
   PW Checkが1件だけならそれを対象とし、複数あれば一覧を提示して選択を求め、
   選択されるまで探索を開始しない
-- 対象のDocが存在しない場合は開始せず、
-  `/test-design <AREA> <概要> --skeleton` を先に実行するよう案内して停止する
-  （骨格先行ルール）
+- 対象のDocが存在しない場合は開始せず、AREA・概要・`--skeleton`を入力として
+  `test-design` workflowをユーザーが明示起動するよう案内して停止する
+  （骨格先行ルール。ホスト別の起動方法は `AGENTS.md` を参照する）
 - API／CU／MN Checkが指定された場合は、このコマンドの対象外である旨と代替
   （APIはAPIクライアントによる探索、CUはCOMPUTER_USE探索、MNは人間による確認）
   を報告して停止する
 - 対象Docの「探索目的」を読み、探索のスコープとする。空の場合はユーザーに
   確認して記入してから開始する
 - 探索には playwright-cli skill を使用する（Skillを起動してから操作する）
+- このrepositoryでは、playwright-cli skillの
+  `references/test-generation.md` にある汎用plan／generate／heal workflowは
+  使用しない。Test Design Docを起点とする本skillと `test-designs/README.md` の
+  安全規則を優先する
 
 ## Preflight（探索開始前・必須）
 

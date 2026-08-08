@@ -14,11 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # cache: npm は使わない: setup-nodeがrepository配下でnpmを実行するため、
-      # Node同梱のnpm 10系がdevEngines（npm >=11.10.0、onFail: error）に弾かれる
+      # package-manager-cacheを無効化する: 有効だとsetup-nodeがrepository配下で
+      # npmを実行し（packageManager field検出時は既定で自動有効）、Node同梱の
+      # npm 10系がdevEngines（npm >=11.10.0、onFail: error）に弾かれる
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          package-manager-cache: false
       # 同じ理由でrepository外のcwdから、packageManagerに固定したversionへ更新する
       - run: npm install -g npm@11.18.0
         working-directory: ${{ runner.temp }}
@@ -41,6 +43,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          package-manager-cache: false
       - run: npm install -g npm@11.18.0
         working-directory: ${{ runner.temp }}
       - run: npm ci

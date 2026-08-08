@@ -14,13 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # cache: npm は使わない: setup-nodeがrepository配下でnpmを実行するため、
+      # Node同梱のnpm 10系がdevEngines（npm >=11.10.0、onFail: error）に弾かれる
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
-      # Node同梱のnpmはpackage.jsonのdevEngines（npm >=11.10.0、onFail: error）を
-      # 満たさないため、packageManagerに固定したversionを導入する
+      # 同じ理由でrepository外のcwdから、packageManagerに固定したversionへ更新する
       - run: npm install -g npm@11.18.0
+        working-directory: ${{ runner.temp }}
       - run: npm ci
       - run: npm run check
       - run: npm run typecheck
@@ -40,8 +41,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
       - run: npm install -g npm@11.18.0
+        working-directory: ${{ runner.temp }}
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm test

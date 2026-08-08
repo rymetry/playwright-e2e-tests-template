@@ -273,10 +273,10 @@ Doc作成は `test-design`、探索は `explore` workflowで実行できる。�
    人間レビューへ、3領域外のテスト実装の不具合は実装修正＋人間レビュー→
    再Qualificationへ、環境障害はテストを変更せず報告する。
    判別不能はプロダクトバグ扱い（安全側）
-4. ヒールが再観測用handoffを提示して停止し、ユーザーが `explore` workflowを
-   Checkごとに明示起動する。観測後はHandoff IDを指定してhealを明示再開し、
-   修正提案を確認する。再開までは同じ会話を維持し、commit・branch変更を行わない。
-   変更した場合は新しいhandoffから再観測する。
+4. ヒールは必要なら同じ明示起動内でPW Checkを再観測し、証跡と分類を再評価して
+   **Proposal**を提示する。公開`explore` workflowの追加起動は不要。対象scopeが
+   変わっていれば再評価して新しいProposalを提示し、以前のProposalは適用しない。
+   対象scope外の並行変更は提案へ混ぜない。
    **適用はProposal IDを指定した明示起動後のみ**
 5. 適用したCheckのうちACTIVEだったものはEVALUATINGへ戻し（4.2）、Check単位で
    4.1のQualificationを再実施してACTIVEへ復帰する。QUARANTINE中だったものは

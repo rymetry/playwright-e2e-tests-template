@@ -39,11 +39,14 @@ Claude CodeとCodexはrepository checkoutからproject skillを発見する。Ch
 - **探索**: [skills/explore/SKILL.md](skills/explore/SKILL.md)
   （browser操作は [skills/playwright-cli/](skills/playwright-cli/) を使用）
 - **失敗の分類・修復**: [skills/heal/SKILL.md](skills/heal/SKILL.md)
-  （修正の適用はProposal IDを指定した明示起動後のみ。禁止変更はREADME 6.1が正）
+  （必要な再観測も同じ起動内で行う。修正の適用はProposal IDを指定した明示起動後のみ。
+  禁止変更はREADME 6.1が正）
 
-healの再観測handoffを受けたら、`--resume <Handoff ID>` まで同じ会話を維持し、
-commitやbranch変更を行わない。変更した場合は既存handoffを再開せず、新しいhandoffから
-再観測する。
+healは一度の明示起動内で、必要ならplaywright-cliによる再観測まで続けてからProposalを
+提示する。公開`explore`は単独探索用であり、healから別skillとして起動しない。再観測中は
+allowlist、認証情報、観測記録の安全規則を維持する。対象scopeの差分が変われば再評価して
+新しいProposalを提示し、以前のProposalは適用しない。branch／HEADや対象scope外の並行
+変更だけでは停止せず、表示・分離する。適用には別途`--apply <Proposal ID>` が必要。
 
 workflowは最初にGit repository rootを取得し、pathとcommandをそこへanchorする。
 subdirectoryから起動してもよいが、Git管理外では開始しない。playwright-cliの

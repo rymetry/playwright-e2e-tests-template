@@ -22,6 +22,17 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EXPECTED_SKILLS = ['test-design', 'explore', 'heal', 'playwright-cli'];
 const WORKFLOW_SKILLS = new Set(['test-design', 'explore', 'heal']);
+const HEAL_REOBSERVE = join(ROOT, 'skills', 'heal', 'references', 'reobserve.md');
+const HEAL_ALLOWED_TOOLS = [
+  'Bash(git status --short --branch)',
+  'Bash(git rev-parse --show-toplevel)',
+  'Bash(git rev-parse HEAD)',
+  'Bash(git rev-parse --abbrev-ref HEAD)',
+  'Bash(git diff --no-ext-diff)',
+  'Bash(git diff --no-ext-diff --cached)',
+  'Bash(npm run check)',
+  'Bash(npm run typecheck)',
+].join(' ');
 const issues = [];
 
 function displayPath(path) {
@@ -176,6 +187,62 @@ function checkPortableBody(path, source, body, bodyOffset) {
   }
 }
 
+function checkHealContract(path, body) {
+  const requiredPhrases = [
+    'references/reobserve.md',
+    '同じheal起動内',
+    '公開`explore`',
+    '通常のpermission確認',
+    '新しいProposal ID',
+    '対象scope外',
+    '以前のProposal',
+  ];
+
+  for (const phrase of requiredPhrases) {
+    if (!body.includes(phrase)) {
+      report(path, `healの連続再観測・再評価契約に必要な記述がありません: ${phrase}`);
+    }
+  }
+
+  if (/\.\.\/explore\/SKILL\.md|explore workflowを[^\n]*明示起動/.test(body)) {
+    report(path, 'healから公開explore workflowを起動する記述は許可されません');
+  }
+}
+
+function checkHealReobserveReference() {
+  const stat = tryLstat(HEAL_REOBSERVE);
+  if (!stat) {
+    report(HEAL_REOBSERVE, 'heal専用の再観測参照fileがありません');
+    return;
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    report(HEAL_REOBSERVE, '再観測参照は正本内の通常fileである必要があります');
+    return;
+  }
+
+  const source = readFileSync(HEAL_REOBSERVE, 'utf8');
+  if (/^---[ \t]*\r?\n/.test(source)) {
+    report(HEAL_REOBSERVE, '内部参照にskill frontmatterを置いてはいけません');
+  }
+  checkPortableBody(HEAL_REOBSERVE, source, source, 0);
+
+  const requiredPhrases = [
+    'skill discovery対象でも',
+    'E2E_ALLOWED_ORIGINS',
+    '本番環境',
+    '認証情報',
+    '通常のpermission確認',
+    'playwright-cli',
+    '再観測中はspecやTest Design Docへ書き込まない',
+    'sessionをclose',
+  ];
+  for (const phrase of requiredPhrases) {
+    if (!source.includes(phrase)) {
+      report(HEAL_REOBSERVE, `再観測の安全契約に必要な記述がありません: ${phrase}`);
+    }
+  }
+}
+
 function checkExpectedDirectoryEntries(path, label) {
   const stat = tryLstat(path);
   if (!stat) {
@@ -327,6 +394,18 @@ function checkSkill(name) {
     } else if (!hasDisabledImplicitInvocation(openaiMetadata)) {
       report(openaiMetadata, 'policy.allow_implicit_invocation: false が必要です');
     }
+
+    if (name === 'heal') {
+      if (fields.get('allowed-tools') !== HEAL_ALLOWED_TOOLS) {
+        report(
+          skillFile,
+          'healのallowed-toolsはGit状態確認とlocal静的検証だけに限定する必要があります',
+        );
+      }
+      checkHealContract(skillFile, body);
+    } else if (fields.has('allowed-tools')) {
+      report(skillFile, `${name} workflowはtoolをpre-approveできません`);
+    }
   } else if (name === 'playwright-cli') {
     if (fields.has('disable-model-invocation')) {
       report(skillFile, 'exploreから利用するsupport skillはmodel invocationを無効化できません');
@@ -353,11 +432,29 @@ function repositoryFiles() {
   }
 }
 
+function checkPublicSkillSurface() {
+  const actual = repositoryFiles()
+    .filter((path) => /^skills\/.+\/SKILL\.md$/.test(path))
+    .sort();
+  const expected = EXPECTED_SKILLS.map((name) => `skills/${name}/SKILL.md`).sort();
+  if (actual.join('\0') !== expected.join('\0')) {
+    report(
+      join(ROOT, 'skills'),
+      `公開SKILL.mdは${expected.join(', ')}だけである必要があります: ` +
+        `${actual.join(', ') || '(空)'}`,
+    );
+  }
+}
+
 function checkLegacyReferences() {
   const legacyPatterns = [
     { label: '.claude/commands', pattern: /\.claude\/commands(?:\/|\b)/g },
     { label: '.agents/commands', pattern: /\.agents\/commands(?:\/|\b)/g },
     { label: 'explore.md', pattern: /(^|[^\w./\\-])explore\.md\b/gm },
+    { label: 'Handoff ID', pattern: /Handoff ID/g },
+    { label: '--resume', pattern: /--resume\b/g },
+    { label: '--confirm-state', pattern: /--confirm-state\b|State Review ID/g },
+    { label: '再観測handoff', pattern: /再観測(?:用)?handoff/g },
   ];
 
   for (const repoPath of repositoryFiles()) {
@@ -397,6 +494,8 @@ function checkLegacyReferences() {
 checkExpectedDirectoryEntries(join(ROOT, 'skills'), 'host中立な正本');
 checkExpectedDirectoryEntries(join(ROOT, '.claude', 'skills'), 'Claude Code discovery');
 checkExpectedDirectoryEntries(join(ROOT, '.agents', 'skills'), 'Codex discovery');
+checkPublicSkillSurface();
+checkHealReobserveReference();
 
 for (const skill of EXPECTED_SKILLS) {
   checkSkill(skill);

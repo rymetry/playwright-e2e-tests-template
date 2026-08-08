@@ -77,7 +77,12 @@ Codexは [.agents/skills/](.agents/skills/) の相対directory symlinkから同�
 Codexでは`/skills`から明示選択することもできる。ChatGPTの`@skill`は、同じskill
 packageをChatGPT側へinstall／enableした場合に使えるもので、repository checkout
 だけでは登録されない。ホスト別metadataは正本内に置き、本文は共通とする。
-詳細とhealのhandoff／再開方法は [AGENTS.md](AGENTS.md) を参照する。
+詳細は [AGENTS.md](AGENTS.md) を参照する。
+
+healは一度の明示起動で、必要な再観測からProposal提示まで続ける。公開exploreの追加起動は
+不要で、公開exploreは単独探索用として残る。対象scopeの差分が変われば再評価し、以前の
+Proposalは適用しない。対象scope外の並行変更は分離し、修正の適用はProposal IDを指定した
+別の明示起動後だけ行う。
 
 Claude Codeの公式仕様はproject skillのdirectory symlinkをサポートし、本構成は
 Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit clone／template copyでは

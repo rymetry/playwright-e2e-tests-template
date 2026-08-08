@@ -42,16 +42,25 @@ Claude CodeとCodexはrepository checkoutからproject skillを発見する。Ch
   （必要な再観測も同じ起動内で行う。修正の適用はProposal IDを指定した明示起動後のみ。
   禁止変更はREADME 6.1が正）
 
-healは一度の明示起動内で、必要ならplaywright-cliによる再観測まで続けてからProposalを
-提示する。公開`explore`は単独探索用であり、healから別skillとして起動しない。再観測中は
-allowlist、認証情報、観測記録の安全規則を維持する。対象scopeの差分が変われば再評価して
-新しいProposalを提示し、以前のProposalは適用しない。branch／HEADや対象scope外の並行
-変更だけでは停止せず、表示・分離する。適用には別途`--apply <Proposal ID>` が必要。
-
 workflowは最初にGit repository rootを取得し、pathとcommandをそこへanchorする。
 subdirectoryから起動してもよいが、Git管理外では開始しない。playwright-cliの
 `references/test-generation.md` にある汎用plan／generate／healは使用せず、上記の
 repository固有workflowと `test-designs/README.md` を優先する。
+
+## skill構成の変更手順
+
+- **skillの追加・削除**: `skills/<name>/` の正本と、`.claude/skills/<name>`・
+  `.agents/skills/<name>` の相対directory symlinkを揃えたうえで、
+  `scripts/check-skills.mjs` の `EXPECTED_SKILLS`（workflow skillの場合は
+  `WORKFLOW_SKILLS` と正本配下の `agents/openai.yaml` も）を更新する。
+  本書とREADMEの表も更新し、`npm run check:skills` で検証する。
+- **healの許可コマンド変更**: `skills/heal/SKILL.md` frontmatterの
+  `allowed-tools` と `scripts/check-skills.mjs` の `HEAL_ALLOWED_TOOLS` を
+  同時に更新する（完全一致で検証される）。
+- **playwright-cli skillのupstream更新**: `skills/playwright-cli/` は
+  microsoft/playwright-cli 由来（Apache-2.0）の改変版。更新時は
+  `skills/playwright-cli/LICENSE`、`THIRD_PARTY_NOTICES.md`、SKILL.md冒頭の
+  改変注記を維持・更新する。
 
 ## 検証コマンド
 

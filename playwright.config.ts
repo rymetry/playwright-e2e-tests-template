@@ -124,11 +124,11 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   /* ファイル内のテストも並列実行する */
   fullyParallel: true,
-  /* test.onlyの消し忘れがある場合はCIを失敗させる */
+  /* test.onlyの消し忘れを失敗させる（ローカル・CI共通） */
   forbidOnly: true,
-  /* CIでのみ再試行する process.env.CI ? 2:0 */
+  /* 再試行で期待値との不一致を隠さないため常に0（test-designs/README.md 4.1・6.1） */
   retries: 0,
-  /* CIでは並列実行を無効にする process.env.CI ? 1 : 2*/
+  /* 直列実行。並列化する場合はテスト独立性を確認して引き上げる */
   workers: 1,
   /* 使用するレポーター。詳細: https://playwright.dev/docs/test-reporters
      Qualification実行時のみ、上書きされない専用フォルダへ保存する */

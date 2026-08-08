@@ -2,10 +2,7 @@
   "name": "playwright-e2e-tests-template",
   "version": "1.0.0",
   "private": true,
-  "description": "",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
+  "description": "Test Design Docを起点にIntegration/E2Eテストを設計・管理するPlaywrightテンプレート",
   "license": "MIT",
   "engines": {
     "node": "^20.17.0 || >=22.9.0"

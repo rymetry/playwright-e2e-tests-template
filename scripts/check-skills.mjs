@@ -5,6 +5,10 @@
  * host中立な `skills/` を正本とし、`.claude/skills/` と `.agents/skills/` は
  * 正本を指す相対directory symlinkだけを許可する。依存パッケージを使わず、
  * 各hostのdiscovery・明示起動ポリシーと本文の可搬性をfail-closedで確認する。
+ *
+ * skill構成は登録制: skillを追加・削除する場合はEXPECTED_SKILLS（workflowは
+ * WORKFLOW_SKILLSも）、healの許可コマンドを変更する場合はHEAL_ALLOWED_TOOLSを
+ * 本fileで更新する。手順はAGENTS.md「skill構成の変更手順」を参照。
  */
 
 import { execFileSync } from 'node:child_process';

@@ -82,8 +82,9 @@ NNは2桁ゼロ埋め連番。例: `E2E-AUTH-001-PW-01`、`INT-ORDER-003-API-02`
 | Area | 対象領域 | 備考 |
 |---|---|---|
 | DEMO | サンプル（playwright.devを対象にした完成例） | 実プロジェクトでは削除可 |
-| （例）AUTH | 認証・ログイン・セッション | |
-| （例）USER | ユーザー管理・プロフィール | |
+
+記入例（**未登録**。使用するには上の表へ正式な行として追加する）:
+`| AUTH | 認証・ログイン・セッション | |`
 
 ## 3. Tier（実行階層）
 
@@ -117,8 +118,9 @@ DRAFT → EVALUATING → ACTIVE ⇄ QUARANTINE → RETIRED
   結果を信頼できない理由が確定した場合。理由と証跡の記録は同様に必須）。
 - Test Design DocのCheck一覧のStatus列と、各Checkの「Test Status判定根拠」は
   同時に更新し、常に一致させる。
-- Docとspecの整合（Statusの2箇所一致、`@quarantine`／`@smoke`タグ、実装の有無、
-  命名規則）は`npm run check`で機械的に検証できる。Statusの変更やspecの
+- Docとspecの整合（Status・Tier値の妥当性、Statusの2箇所一致、
+  `@quarantine`／`@smoke`タグ、実装の有無、命名規則）は`npm run check`で
+  機械的に検証できる。Statusの変更やspecの
   追加・削除を行ったら実行する。
 
 ### 4.1 ACTIVEへの昇格条件（Qualification）
@@ -256,7 +258,9 @@ Doc作成は `test-design`、探索は `explore` workflowで実行できる。�
 - 探索結果は「探索で確認した事実」節にのみ書き、期待値欄には書かない
 
 完成例として、`test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md` と
-対応する `e2e/demo/E2E-DEMO-001.spec.ts` を参照できる。
+対応する `e2e/demo/E2E-DEMO-001.spec.ts`（PW Check）、
+`test-designs/int/demo/INT-DEMO-001-docs-availability.md` と
+`e2e/demo/INT-DEMO-001.spec.ts`（API Check）を参照できる。
 
 ### 6.1 失敗時の修復フロー（ヒール）
 

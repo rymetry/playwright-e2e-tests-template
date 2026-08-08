@@ -14,9 +14,11 @@ Test Design Doc体系で設計・管理する。
    対象環境に合わせる（本番環境をallowlistへ入れない）
 4. [test-designs/README.md](test-designs/README.md) 2.4のAreaレジストリに
    自プロジェクトの機能領域を登録する
-5. サンプル一式を削除する: `test-designs/e2e/demo/`、`e2e/demo/`、
-   AreaレジストリのDEMO行（書き方の参考として残してもよい）
-6. `test-designs/_archive/`（旧テンプレート）が残っていれば削除する
+5. サンプル一式（`test-designs/e2e/demo/`、`test-designs/int/demo/`、
+   `e2e/demo/`、AreaレジストリのDEMO行）を削除する。
+   書き方の参考として一式を残してもよい
+6. CIを使う場合はGitHubのrepository variablesを設定する
+   （`E2E_CI=true`・`E2E_BASE_URL`・`E2E_ALLOWED_ORIGINS`。「CI」の章を参照）
 7. `npm run check` と `npm run typecheck` が通ることを確認する
    （`npm test` はサンプル削除直後はテスト0件で失敗するため、
    最初の実ケースを作成した後に確認する）
@@ -60,6 +62,24 @@ cp .env.example .env
 - スクリプトはPOSIXシェル前提（macOS／Linux）。Windowsでは `cross-env` 等が必要
 - Design Docを永続記録として運用するため、リポジトリはGit管理下に置くことを推奨
 
+## CI
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) がpush／pull request時に
+`npm run check` と `npm run typecheck` を実行する（skill symlinkの整合も
+ここで検証される）。
+
+E2Eテストの実行（`npm test`）は、GitHubのrepository variablesを設定した場合のみ
+有効になる:
+
+| Variable | 値 |
+|---|---|
+| `E2E_CI` | `true`（未設定ならE2E jobをskipする） |
+| `E2E_BASE_URL` | 対象環境のURL |
+| `E2E_ALLOWED_ORIGINS` | 許可済みoriginのカンマ区切り一覧（本番環境を入れない） |
+
+テンプレート直後・サンプル削除直後はテスト0件で失敗するため、既定では無効に
+してある。最初の実ケースをACTIVEにした後に有効化する。
+
 ## テスト設計
 
 テストは必ずTest Design Docを起点に作成する。4 skillのhost中立な正本は
@@ -79,10 +99,10 @@ packageをChatGPT側へinstall／enableした場合に使えるもので、repos
 だけでは登録されない。ホスト別metadataは正本内に置き、本文は共通とする。
 詳細は [AGENTS.md](AGENTS.md) を参照する。
 
-healは一度の明示起動で、必要な再観測からProposal提示まで続ける。公開exploreの追加起動は
-不要で、公開exploreは単独探索用として残る。対象scopeの差分が変われば再評価し、以前の
-Proposalは適用しない。対象scope外の並行変更は分離し、修正の適用はProposal IDを指定した
-別の明示起動後だけ行う。
+healの運用ルール（同一起動内での再観測、Proposalの承認と適用の分離、禁止変更）の
+正は [test-designs/README.md](test-designs/README.md) 6.1にあり、
+[skills/heal/SKILL.md](skills/heal/SKILL.md) はそれに従う実行手順である。
+本書では重複記述しない。
 
 Claude Codeの公式仕様はproject skillのdirectory symlinkをサポートし、本構成は
 Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit clone／template copyでは
@@ -93,7 +113,8 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 - 管理ルール（ID命名規則、Tier、Status、昇格条件、スイート拡張方針、
   コード実装方針〔インライン既定・POMはトリガー駆動〕）: [test-designs/README.md](test-designs/README.md)
 - Design Docテンプレート: [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md)
-- 完成例: [test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md](test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md) と [e2e/demo/E2E-DEMO-001.spec.ts](e2e/demo/E2E-DEMO-001.spec.ts)
+- 完成例（PW Check）: [test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md](test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md) と [e2e/demo/E2E-DEMO-001.spec.ts](e2e/demo/E2E-DEMO-001.spec.ts)
+- 完成例（API Check）: [test-designs/int/demo/INT-DEMO-001-docs-availability.md](test-designs/int/demo/INT-DEMO-001-docs-availability.md) と [e2e/demo/INT-DEMO-001.spec.ts](e2e/demo/INT-DEMO-001.spec.ts)
 
 ## ディレクトリ構成
 
@@ -108,6 +129,14 @@ skills/                  … 4 skillのhost中立な正本
 .claude/skills/          … 正本への相対symlink（Claude Code discovery）
 .agents/skills/          … 正本への相対symlink（Codex discovery）
 scripts/                 … 整合チェッカー等の運用スクリプト
+.github/workflows/       … CI（check／typecheckは常時、E2Eはrepository variablesで有効化）
 playwright-report/       … 通常実行のHTMLレポート（Git管理外、実行ごとに上書き）
 qualification-reports/   … Qualificationのレポート（Git管理外、実行ごとに保存）
 ```
+
+## ライセンス
+
+MIT License（[LICENSE](LICENSE)）。ただし [skills/playwright-cli/](skills/playwright-cli/) は
+[microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) 由来の
+Apache License 2.0（改変版）であり、出所・改変内容は
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照する。

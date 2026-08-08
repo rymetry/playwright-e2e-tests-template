@@ -18,7 +18,7 @@
  * チェックルール一覧:
  *   No.1 Parent Case ID・Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>[-<MODE>-<NN>]）に従っている
  *   No.2 Check IDが全Docを通して重複していない
- *   No.3 Check一覧のStatusが正しい値で、Docファイル名がParent Case IDで始まる
+ *   No.3 Check一覧のStatus・Tierが正しい値で、Docファイル名がParent Case IDで始まる
  *   No.4 Check一覧のStatusと、各Checkの「Test Status判定根拠」表の判定が一致する
  *   No.5 PW/API CheckはStatusに応じてspecが存在する（EVALUATING以上=必須、RETIRED=禁止）
  *   No.6 Status=QUARANTINEとテストの@quarantineタグが両方向で一致する
@@ -45,6 +45,9 @@ const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}$/;
 const CHECK_ID_LOOSE = /(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}/;
 
 const VALID_STATUSES = new Set(['DRAFT', 'EVALUATING', 'ACTIVE', 'QUARANTINE', 'RETIRED']);
+// test-designs/README.md 3章のTier。不正値（テンプレートの選択肢表記の残置等)は
+// 「SMOKE以外」としてサイレントにsmoke suiteから漏れるため、列挙検証する
+const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 // specの存在を要求するStatus（DRAFTは実装前でもよい）
 const STATUSES_REQUIRING_SPEC = new Set(['EVALUATING', 'ACTIVE', 'QUARANTINE']);
 // 自動実行されるExecution mode（specと突き合わせる対象）
@@ -265,6 +268,11 @@ function main() {
         report(docPath, `Check ID「${check.id}」が複数のDocで定義されています`);
       }
       docCheckIds.add(check.id);
+
+      // ルールNo.3: Tier値
+      if (!VALID_TIERS.has(check.tier)) {
+        report(docPath, `「${check.id}」のTier「${check.tier}」は不正な値です（SMOKE/REGRESSION/EXTENDEDのいずれか）`);
+      }
 
       // ルールNo.3（前半）: Status値
       if (!VALID_STATUSES.has(check.status)) {

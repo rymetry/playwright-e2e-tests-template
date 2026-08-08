@@ -1,8 +1,17 @@
 ---
 name: playwright-cli
 description: Automate browser interactions, test web pages and work with Playwright tests.
+license: Apache-2.0
 allowed-tools: Bash(playwright-cli:*)
 ---
+
+<!--
+Derived from microsoft/playwright-cli (skills/playwright-cli), Copyright (c) Microsoft
+Corporation, licensed under the Apache License 2.0. See LICENSE in this directory and
+THIRD_PARTY_NOTICES.md at the repository root. This file has been MODIFIED for this
+repository: allowed-tools is restricted to playwright-cli only, and the Installation
+section uses the repository-pinned version without installing packages.
+-->
 
 # Browser Automation with playwright-cli
 

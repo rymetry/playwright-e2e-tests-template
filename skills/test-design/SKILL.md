@@ -1,9 +1,18 @@
 ---
+name: test-design
 description: Test Design Docを命名規則に従って新規作成する（ID採番・テンプレート展開・整合チェックまで）
-argument-hint: <AREA> <シナリオ概要> [--level E2E|INT] [--skeleton]
+argument-hint: "<AREA> <シナリオ概要> [--level E2E|INT] [--skeleton]"
+disable-model-invocation: true
 ---
 
-Test Design Docを新規作成する。引数: $ARGUMENTS
+Test Design Docを新規作成する。ユーザーがこのskillの起動時に指定した入力を、
+以下の「入力」として扱う。ホスト別の明示起動方法は `AGENTS.md` を参照する。
+
+## Repository root（必須）
+
+最初に `git rev-parse --show-toplevel` でGit repository rootを取得する。取得できない
+場合は開始せず停止する。以後、相対pathはすべてrepository root基準で解決し、
+shell commandもrepository rootをworking directoryとして実行する。
 
 ## 前提
 
@@ -11,7 +20,7 @@ Test Design Docを新規作成する。引数: $ARGUMENTS
 （5章）・運用フロー（6章）を読み、従う。テンプレートは
 `test-designs/templates/test-design-doc-template.md`。
 
-引数の解釈:
+入力の解釈:
 
 - 第1引数: AREAコード（大文字英字2〜6文字）
 - 第2引数以降: シナリオ概要
@@ -60,7 +69,9 @@ Test Design Docを新規作成する。引数: $ARGUMENTS
      残さず、本文を `未記入（探索後に本記入）` へ置換する。
 7. **検証**: `npm run check` を実行しPASSすることを確認する。
 8. **報告**: 作成したID・ファイルパス・次のステップを提示する。
-   探索が必要なら `/explore <Check ID>`、探索不要なら期待値レビューの依頼。
+   探索が必要なら、対象Check IDを添えて `explore` workflowの明示起動をユーザーへ
+   案内する。探索不要なら期待値レビューを依頼する。ホスト別の起動方法は
+   `AGENTS.md` を参照する。
 
 ## 厳守事項
 

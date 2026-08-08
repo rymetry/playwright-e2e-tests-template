@@ -222,8 +222,9 @@ Qualificationを再実施する。
 
 ## 6. 運用フロー
 
-Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/commands/`）で
-実行できる。機能の理解度に応じて2パターンを使い分ける。
+Doc作成は `test-design`、探索は `explore` workflowで実行できる。ホスト別の
+明示起動方法は [AGENTS.md](../AGENTS.md) を参照する。機能の理解度に応じて
+2パターンを使い分ける。
 **どちらもDoc（ID採番）が先**であり、探索結果は常にDocへ着地する。
 
 **パターン1: 機能・仕様がわかっている場合**
@@ -259,7 +260,8 @@ Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/comma
 
 ### 6.1 失敗時の修復フロー（ヒール）
 
-テスト失敗の調査と修復は `/heal` コマンド（`.claude/commands/heal.md`）で行う。
+テスト失敗の調査と修復は
+[heal skill](../skills/heal/SKILL.md) で行う。
 ヒールは実行時の自己修復ではなく**保守時のワークフロー**であり、次の順で進む。
 
 1. 失敗の収集（直近実行の全失敗）と証跡確保。元の失敗記録は上書き・削除しない
@@ -271,14 +273,18 @@ Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/comma
    人間レビューへ、3領域外のテスト実装の不具合は実装修正＋人間レビュー→
    再Qualificationへ、環境障害はテストを変更せず報告する。
    判別不能はプロダクトバグ扱い（安全側）
-4. `/explore` による再観測と、修正提案の提示。**適用はユーザー承認後のみ**
+4. ヒールは必要なら同じ明示起動内でPW Checkを再観測し、証跡と分類を再評価して
+   **Proposal**を提示する。公開`explore` workflowの追加起動は不要。対象scopeが
+   変わっていれば再評価して新しいProposalを提示し、以前のProposalは適用しない。
+   対象scope外の並行変更は提案へ混ぜない。
+   **適用はProposal IDを指定した明示起動後のみ**
 5. 適用したCheckのうちACTIVEだったものはEVALUATINGへ戻し（4.2）、Check単位で
    4.1のQualificationを再実施してACTIVEへ復帰する。QUARANTINE中だったものは
    Status・`@quarantine`タグを維持したまま再Qualificationし、成功後にタグ除去と
    ACTIVE復帰を同時に行う（4.3）
 
 API Checkの修復は、観測を要しないテストデータ不備のみを対象とする
-（`/explore` はAPI Checkを対象外とするため。APIの再観測手順を定義した時点で
+（`explore` はAPI Checkを対象外とするため。APIの再観測手順を定義した時点で
 対象を拡張する）。
 
 **ヒールの禁止変更リスト（ルールの正）**

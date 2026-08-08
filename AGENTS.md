@@ -18,18 +18,45 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 
 ## 定型手順
 
-Claude Codeではスラッシュコマンド、他のエージェントでは手順書として同じ
-ファイルに従う。
+4 skillのhost中立な正本は `skills/<name>/` に置く。Claude Codeは
+`.claude/skills/<name>`、Codexは `.agents/skills/<name>` の相対directory symlinkから
+**同じ正本**を発見する。複製したミラーは作らず、変更は `skills/` だけに行う。
+正本のYAML frontmatterにClaude Code拡張を、同じ正本配下の
+`agents/openai.yaml` にOpenAI metadataを置き、本文はhost中立に保つ。
 
-- **Test Design Doc作成**: [.agents/commands/test-design.md](.agents/commands/test-design.md) の手順に従う
-- **探索**: [.agents/commands/explore.md](.agents/commands/explore.md) の手順に従う
-  （browser操作は `.agents/skills/playwright-cli/` のskillを使用）
-- **失敗の分類・修復**: [.agents/commands/heal.md](.agents/commands/heal.md) の手順に従う
-  （修正の適用はユーザー承認後のみ。禁止変更はREADME 6.1が正）
+| Workflow / skill | Claude Code | Codex CLI／IDE／Desktop | ChatGPT（skill install／enable済み） |
+|---|---|---|---|
+| Test Design Doc作成 | `/test-design <AREA> <概要>` | `$test-design <AREA> <概要>`（または`/skills`から選択） | `@test-design <AREA> <概要>` |
+| 探索 | `/explore <Check ID>` | `$explore <Check ID>`（または`/skills`から選択） | `@explore <Check ID>` |
+| 失敗の分類・修復 | `/heal` | `$heal`（または`/skills`から選択） | `@heal` |
+| browser操作 | `/playwright-cli` | `$playwright-cli`（または`/skills`から選択） | `@playwright-cli` |
+
+Claude CodeとCodexはrepository checkoutからproject skillを発見する。ChatGPTでの
+`@skill` 起動には、同じskill packageをChatGPT側へ別途install／enableしておく必要が
+あり、checkoutだけでは登録されない。
+
+- **Test Design Doc作成**: [skills/test-design/SKILL.md](skills/test-design/SKILL.md)
+- **探索**: [skills/explore/SKILL.md](skills/explore/SKILL.md)
+  （browser操作は [skills/playwright-cli/](skills/playwright-cli/) を使用）
+- **失敗の分類・修復**: [skills/heal/SKILL.md](skills/heal/SKILL.md)
+  （必要な再観測も同じ起動内で行う。修正の適用はProposal IDを指定した明示起動後のみ。
+  禁止変更はREADME 6.1が正）
+
+healは一度の明示起動内で、必要ならplaywright-cliによる再観測まで続けてからProposalを
+提示する。公開`explore`は単独探索用であり、healから別skillとして起動しない。再観測中は
+allowlist、認証情報、観測記録の安全規則を維持する。対象scopeの差分が変われば再評価して
+新しいProposalを提示し、以前のProposalは適用しない。branch／HEADや対象scope外の並行
+変更だけでは停止せず、表示・分離する。適用には別途`--apply <Proposal ID>` が必要。
+
+workflowは最初にGit repository rootを取得し、pathとcommandをそこへanchorする。
+subdirectoryから起動してもよいが、Git管理外では開始しない。playwright-cliの
+`references/test-generation.md` にある汎用plan／generate／healは使用せず、上記の
+repository固有workflowと `test-designs/README.md` を優先する。
 
 ## 検証コマンド
 
-- `npm run check` — Design Docとspecの整合チェック（Status・タグ・命名規則）
+- `npm run check` — Design Doc／spec整合と両hostのskill構造を検査
+- `npm run check:skills` — skill構造だけを検査
 - `npm run typecheck` — TypeScript型検査
 - `npm test` — 通常実行（QUARANTINE除外）
 

@@ -67,7 +67,7 @@ cp .env.example .env
 Codexは [.agents/skills/](.agents/skills/) の相対directory symlinkから同じ正本を
 発見する。
 
-| 用途 | Claude Code | Codex CLI／IDE／Desktop | ChatGPT |
+| 用途 | Claude Code | Codex CLI／IDE／Desktop | ChatGPT（skill install／enable済み） |
 |---|---|---|---|
 | Doc作成 | `/test-design <AREA> <概要>` | `$test-design <AREA> <概要>` | `@test-design <AREA> <概要>` |
 | 探索・観測記録 | `/explore <Check ID>` | `$explore <Check ID>` | `@explore <Check ID>` |

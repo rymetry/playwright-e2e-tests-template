@@ -3,6 +3,8 @@
 このfileはhealが必要時に読む非公開の参照手順であり、skill discovery対象でも
 ユーザー向けの起動入口でもない。公開`explore` workflowを呼ばず、現在のheal起動内で
 playwright-cli commandを直接実行する。browser／network操作は通常のpermission確認に従う。
+本手順は公開`skills/explore/SKILL.md`のうち再観測にも適用する安全規則の要約である。
+公開exploreの該当規則を変更した場合は、このfileにも反映する。
 
 ## 開始条件
 

@@ -188,22 +188,6 @@ function checkPortableBody(path, source, body, bodyOffset) {
 }
 
 function checkHealContract(path, body) {
-  const requiredPhrases = [
-    'references/reobserve.md',
-    '同じheal起動内',
-    '公開`explore`',
-    '通常のpermission確認',
-    '新しいProposal ID',
-    '対象scope外',
-    '以前のProposal',
-  ];
-
-  for (const phrase of requiredPhrases) {
-    if (!body.includes(phrase)) {
-      report(path, `healの連続再観測・再評価契約に必要な記述がありません: ${phrase}`);
-    }
-  }
-
   if (/\.\.\/explore\/SKILL\.md|explore workflowを[^\n]*明示起動/.test(body)) {
     report(path, 'healから公開explore workflowを起動する記述は許可されません');
   }

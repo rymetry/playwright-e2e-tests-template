@@ -33,6 +33,8 @@ shell commandもrepository rootをworking directoryとして実行する。
   `references/test-generation.md` にある汎用plan／generate／heal workflowは
   使用しない。Test Design Docを起点とする本skillと `test-designs/README.md` の
   安全規則を優先する
+- 以下の安全規則を変更し、healの再観測にも影響する場合は
+  `../heal/references/reobserve.md` にも反映する
 
 ## Preflight（探索開始前・必須）
 

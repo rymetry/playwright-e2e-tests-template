@@ -24,7 +24,7 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 正本のYAML frontmatterにClaude Code拡張を、同じ正本配下の
 `agents/openai.yaml` にOpenAI metadataを置き、本文はhost中立に保つ。
 
-| Workflow / skill | Claude Code | Codex CLI／IDE／Desktop | ChatGPT |
+| Workflow / skill | Claude Code | Codex CLI／IDE／Desktop | ChatGPT（skill install／enable済み） |
 |---|---|---|---|
 | Test Design Doc作成 | `/test-design <AREA> <概要>` | `$test-design <AREA> <概要>`（または`/skills`から選択） | `@test-design <AREA> <概要>` |
 | 探索 | `/explore <Check ID>` | `$explore <Check ID>`（または`/skills`から選択） | `@explore <Check ID>` |

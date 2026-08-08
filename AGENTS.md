@@ -11,7 +11,8 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 ## 必読ドキュメント
 
 - [test-designs/README.md](test-designs/README.md) — ID命名規則、Status、
-  Qualification、安全規則、運用フロー（2パターン）、スイート拡張方針、
+  Qualification、安全規則、運用フロー（2パターン＋失敗時の修復フロー）、
+  スイート拡張方針、
   コード実装方針（インライン既定・POMはトリガー駆動）
 - [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md) — Docテンプレート
 
@@ -23,6 +24,8 @@ Claude Codeではスラッシュコマンド、他のエージェントでは手
 - **Test Design Doc作成**: [.agents/commands/test-design.md](.agents/commands/test-design.md) の手順に従う
 - **探索**: [.agents/commands/explore.md](.agents/commands/explore.md) の手順に従う
   （browser操作は `.agents/skills/playwright-cli/` のskillを使用）
+- **失敗の分類・修復**: [.agents/commands/heal.md](.agents/commands/heal.md) の手順に従う
+  （修正の適用はユーザー承認後のみ。禁止変更はREADME 6.1が正）
 
 ## 検証コマンド
 

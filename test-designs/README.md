@@ -71,7 +71,9 @@ NNは2桁ゼロ埋め連番。例: `E2E-AUTH-001-PW-01`、`INT-ORDER-003-API-02`
 - ID・タイトルの対応により `npm test -- --grep "E2E-AUTH-001"` で
   Parent Case単位、`npm test -- --grep "E2E-AUTH-"` でArea単位の実行ができる。
 - 絞り込み実行は必ず`npm test -- --grep`経由で行う。`npx playwright test`の
-  直接実行では`@quarantine`の除外が適用されない。
+  直接実行では`@quarantine`の除外が適用されない。例外として、QUARANTINE中の
+  Checkの診断・再現に限り、6.1の修復フローに従った対象限定の直接実行を
+  許可する（通常実行の代替にはしない）。
 
 ### 2.4 Areaレジストリ
 
@@ -111,6 +113,8 @@ DRAFT → EVALUATING → ACTIVE ⇄ QUARANTINE → RETIRED
 | RETIRED | 対象機能の廃止等で恒久的に終了。IDは再利用しない |
 
 - RETIREDへはACTIVE／QUARANTINEのどちらからも変更できる。
+- QUARANTINEへはACTIVEからだけでなくEVALUATINGからも変更できる（評価・修復中に
+  結果を信頼できない理由が確定した場合。理由と証跡の記録は同様に必須）。
 - Test Design DocのCheck一覧のStatus列と、各Checkの「Test Status判定根拠」は
   同時に更新し、常に一致させる。
 - Docとspecの整合（Statusの2箇所一致、`@quarantine`／`@smoke`タグ、実装の有無、
@@ -244,12 +248,63 @@ Doc作成は `/test-design`、探索は `/explore` コマンド（`.claude/comma
 **探索の保存先規約**
 
 - 生成物（screenshot等）は `.playwright/artifacts/<Run ID>/` へ置く（Git管理外）。
-  Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式
+  Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。例外として、ヒール（6.1）の
+  証跡退避は複数Checkを一括で扱うため `YYYYMMDD-HHmm_heal` 形式
+  （同名がある場合は連番を付す）を使う
 - DocのArtifacts欄にはRun IDと必要最小限の相対pathだけを記録する
 - 探索結果は「探索で確認した事実」節にのみ書き、期待値欄には書かない
 
 完成例として、`test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md` と
 対応する `e2e/demo/E2E-DEMO-001.spec.ts` を参照できる。
+
+### 6.1 失敗時の修復フロー（ヒール）
+
+テスト失敗の調査と修復は `/heal` コマンド（`.claude/commands/heal.md`）で行う。
+ヒールは実行時の自己修復ではなく**保守時のワークフロー**であり、次の順で進む。
+
+1. 失敗の収集（直近実行の全失敗）と証跡確保。元の失敗記録は上書き・削除しない
+   （再現実行の前に既存の実行成果物を退避する）
+2. 根本原因クラスタへのグループ化と、証跡ベースの分類
+3. ルーティング: ヒールが修正してよいのは**Locator・待機条件・テストデータ準備**
+   の3領域のみ。プロダクト不具合の疑いは修復せず報告（QUARANTINE化を提案）、
+   仕様変更・シナリオ誤りは本章パターン1の2〜5を準用したDoc改訂＋
+   人間レビューへ、3領域外のテスト実装の不具合は実装修正＋人間レビュー→
+   再Qualificationへ、環境障害はテストを変更せず報告する。
+   判別不能はプロダクトバグ扱い（安全側）
+4. `/explore` による再観測と、修正提案の提示。**適用はユーザー承認後のみ**
+5. 適用したCheckのうちACTIVEだったものはEVALUATINGへ戻し（4.2）、Check単位で
+   4.1のQualificationを再実施してACTIVEへ復帰する。QUARANTINE中だったものは
+   Status・`@quarantine`タグを維持したまま再Qualificationし、成功後にタグ除去と
+   ACTIVE復帰を同時に行う（4.3）
+
+API Checkの修復は、観測を要しないテストデータ不備のみを対象とする
+（`/explore` はAPI Checkを対象外とするため。APIの再観測手順を定義した時点で
+対象を拡張する）。
+
+**ヒールの禁止変更リスト（ルールの正）**
+
+ヒールは分類によらず次の変更を行わない。
+
+1. `expect`・期待値の削除・緩和・現状動作への追認
+2. Docの「レビュー済みの期待値」「Assertion設計」「シナリオ」「対象外・未確定」
+   節の変更（必要な場合は該当フローへ案内して停止する）
+3. `skip`・`fixme`・コメントアウトによる無効化（隔離は`@quarantine`タグのみ）
+4. タイムアウト・リトライの引き上げによる症状の隠蔽
+5. 固定wait／sleepの追加
+6. `force: true`、`nth()`、不安定なCSS／XPathなど実行契約の趣旨に反する
+   Locatorへの置換
+7. シナリオのステップ省略、別経路で最終状態だけ合わせる変更
+8. プロダクト不具合をテスト変更で吸収すること
+9. Qualification記録・失敗証跡の書き換え・削除
+10. assertionを条件分岐・早期return・例外の握り潰しなどで実行されない経路へ
+    置く変更、および未await化・`test.fail()`・`test.fixme()`などによる
+    結果の無効化
+11. 修復手段としてmock・stub・network interception・直接の状態注入を導入し、
+    期待結果を作り出す変更（テスト設計としての導入はDoc改訂＋期待値レビューを
+    経由する）
+12. 権限・tenant・所有関係・feature flag・境界値・入力クラスなど、ケースを
+    特徴づけるテストデータの意味を変える変更（データ修正は同じ意味クラスを
+    保った生成・識別・cleanupの改善に限る）
 
 ## 7. スイート拡張の方針
 

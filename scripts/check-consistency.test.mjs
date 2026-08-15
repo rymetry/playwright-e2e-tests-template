@@ -226,6 +226,7 @@ test('Check一覧と探索サマリのmode不一致を拒否する', () => {
 test('完了した探索のRun / 観測環境を検証する', async (t) => {
   const id = 'E2E-TST-001-PW-01';
   const canonical = completedRunEnvironment(id, 'PLAYWRIGHT_CLI');
+  const runId = canonical.match(/Run ID: ([^;]+)/)?.[1];
   const validate = (runEnvironment, artifacts = 'なし') => {
     const [check] = parseChecks([buildCheck({
       id,
@@ -242,6 +243,12 @@ test('完了した探索のRun / 観測環境を検証する', async (t) => {
 
   await t.test('canonical Run IDと同じRun IDを含むsessionを受け入れる', () => {
     assert.equal(validate(canonical), '');
+  });
+  await t.test('英数字suffixにplaceholder語を含むcanonical Run IDを受け入れる', () => {
+    assert.equal(validate(canonical.replaceAll('a1b2c3d4', 'TODO1234')), '');
+  });
+  await t.test('同じRun IDを持つheal sessionを受け入れる', () => {
+    assert.equal(validate(canonical.replace('Session: explore-', 'Session: heal-')), '');
   });
   await t.test('Run ID labelの欠落を拒否する', () => {
     assert.match(
@@ -264,7 +271,13 @@ test('完了した探索のRun / 観測環境を検証する', async (t) => {
   await t.test('Run IDを含まないsessionを拒否する', () => {
     assert.match(
       validate(canonical.replace(/Session: [^;]+/, 'Session: explore-other-run')),
-      /「Session」に同じRun IDが含まれていません/,
+      /「Session」が同じRun IDの規定session名ではありません/,
+    );
+  });
+  await t.test('同じRun IDへsuffixを付けた別sessionを拒否する', () => {
+    assert.match(
+      validate(canonical.replace(/Session: ([^;]+)/, 'Session: $1-stale')),
+      /規定session名ではありません/,
     );
   });
   await t.test('必須labelの欠落を拒否する', () => {
@@ -279,10 +292,47 @@ test('完了した探索のRun / 観測環境を検証する', async (t) => {
       /タイムゾーン付きISO日時/,
     );
   });
+  await t.test('可変桁の小数秒を持つISO日時を受け入れる', () => {
+    assert.equal(
+      validate(canonical.replace('2026-08-15T10:15:30+09:00', '2026-08-15T10:15:30.1+09:00')),
+      '',
+    );
+    assert.equal(
+      validate(canonical.replace('2026-08-15T10:15:30+09:00', '2026-08-15T10:15:30.123456+09:00')),
+      '',
+    );
+  });
+  await t.test('成立しない観測日時を拒否する', () => {
+    assert.match(
+      validate(canonical.replace('2026-08-15T10:15:30+09:00', '2026-02-31T10:15:30+09:00')),
+      /タイムゾーン付きISO日時/,
+    );
+  });
+  await t.test('成立しないRun ID日時を拒否する', () => {
+    assert.match(
+      validate(canonical.replaceAll('20260815-101530-123', '20260231-101530-123')),
+      /「Run ID」の日時が成立しません/,
+    );
+  });
+  await t.test('必須labelのplaceholderを拒否する', () => {
+    assert.match(
+      validate(canonical.replace(/Tool \/ version: [^;]+/, 'Tool / version: TODO')),
+      /placeholderが残っています/,
+    );
+  });
+  await t.test('Artifact pathの独立segmentに同じRun IDがあれば受け入れる', () => {
+    assert.equal(validate(canonical, `.playwright/artifacts/${runId}/result.png`), '');
+  });
   await t.test('Artifact pathにRun IDがない場合を拒否する', () => {
     assert.match(
       validate(canonical, 'other-run/result.png'),
-      /「Artifacts」に同じRun IDが含まれていません/,
+      /「Artifacts」に同じRun IDのpath segmentがありません/,
+    );
+  });
+  await t.test('同じRun IDへsuffixを付けた別Artifact pathを拒否する', () => {
+    assert.match(
+      validate(canonical, `${runId}-copy/result.png`),
+      /同じRun IDのpath segmentがありません/,
     );
   });
 });

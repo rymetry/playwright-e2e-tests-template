@@ -97,7 +97,7 @@ const RUN_ENVIRONMENT_REQUIRED_FIELDS = [
   'Observed at',
 ];
 const RUN_ID_PATTERN = /^(\d{8}-\d{6}-\d{3})_((?:E2E|INT)-[A-Z]{2,6}-\d{3}-(?:PW|API|CU|MN)-\d{2})_([A-Za-z0-9]{8})$/;
-const OBSERVED_AT_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2}))(?:$|\s|（)/;
+const OBSERVED_AT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))(?:$|\s|（)/;
 
 /** 検出した問題の蓄積先。{ file, message } の配列 */
 const issues = [];
@@ -169,6 +169,98 @@ function parseRunEnvironment(value) {
   return { fields, duplicates };
 }
 
+function isLeapYear(year) {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function isValidDateTimeParts(year, month, day, hour, minute, second) {
+  const daysByMonth = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return (
+    year >= 1 &&
+    month >= 1 && month <= 12 &&
+    day >= 1 && day <= daysByMonth[month - 1] &&
+    hour >= 0 && hour <= 23 &&
+    minute >= 0 && minute <= 59 &&
+    second >= 0 && second <= 59
+  );
+}
+
+function parseObservedAt(value) {
+  const match = value.match(OBSERVED_AT_PATTERN);
+  if (match === null) {
+    return undefined;
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText,
+    fraction = '', zone, sign, offsetHourText = '0', offsetMinuteText = '0'] = match;
+  const [year, month, day, hour, minute, second, offsetHour, offsetMinute] = [
+    yearText,
+    monthText,
+    dayText,
+    hourText,
+    minuteText,
+    secondText,
+    offsetHourText,
+    offsetMinuteText,
+  ].map(Number);
+  if (
+    !isValidDateTimeParts(year, month, day, hour, minute, second) ||
+    offsetHour > 23 ||
+    offsetMinute > 59
+  ) {
+    return undefined;
+  }
+
+  const milliseconds = Number(fraction.padEnd(3, '0').slice(0, 3));
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, milliseconds);
+  const offsetDirection = zone === 'Z' ? 0 : (sign === '+' ? 1 : -1);
+  const offsetMilliseconds = offsetDirection * (offsetHour * 60 + offsetMinute) * 60_000;
+  return { epochMilliseconds: date.getTime() - offsetMilliseconds };
+}
+
+function isValidRunIdTimestamp(value) {
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-(\d{3})$/);
+  if (match === null) {
+    return false;
+  }
+  const [, year, month, day, hour, minute, second] = match.map(Number);
+  return isValidDateTimeParts(year, month, day, hour, minute, second);
+}
+
+function containsRunEnvironmentPlaceholder(rawValue) {
+  const { fields } = parseRunEnvironment(rawValue);
+  if (fields.size === 0) {
+    return containsContractPlaceholder(rawValue);
+  }
+
+  const runId = normalizeMarkdownCode(fields.get('Run ID') ?? '');
+  const runIdIsStructured = RUN_ID_PATTERN.test(runId);
+  let foundContractField = false;
+  for (const field of ['Run ID', ...RUN_ENVIRONMENT_REQUIRED_FIELDS]) {
+    const value = fields.get(field);
+    if (value === undefined) {
+      continue;
+    }
+    foundContractField = true;
+    if (field === 'Run ID' && runIdIsStructured) {
+      continue;
+    }
+    let placeholderCandidate = value;
+    if (field === 'Session' && runIdIsStructured) {
+      placeholderCandidate = value.replace(new RegExp(escapeRegExp(runId), 'gi'), '');
+    }
+    if (containsContractPlaceholder(placeholderCandidate)) {
+      return true;
+    }
+  }
+  return !foundContractField && containsContractPlaceholder(rawValue);
+}
+
+function artifactsReferenceRunId(artifacts, runId) {
+  return artifacts.split(/[\s\/,;:()（）`'"\[\]]+/u).includes(runId);
+}
+
 function validateRunEnvironment(check, rawValue, artifacts) {
   const problems = [];
   const { fields, duplicates } = parseRunEnvironment(rawValue);
@@ -184,10 +276,12 @@ function validateRunEnvironment(check, rawValue, artifacts) {
   for (const field of duplicates) {
     problems.push(`の探索サマリ「Run / 観測環境」の「${field}」が重複しています`);
   }
+  if (containsRunEnvironmentPlaceholder(rawValue)) {
+    problems.push('の探索サマリ「Run / 観測環境」にplaceholderが残っています');
+  }
 
   const observedAt = fields.get('Observed at') ?? '';
-  const observedAtMatch = observedAt.match(OBSERVED_AT_PATTERN);
-  if (observedAtMatch === null || Number.isNaN(Date.parse(observedAtMatch[1]))) {
+  if (parseObservedAt(observedAt) === undefined) {
     problems.push('の探索サマリ「Observed at」はタイムゾーン付きISO日時にしてください');
   }
 
@@ -200,18 +294,22 @@ function validateRunEnvironment(check, rawValue, artifacts) {
     problems.push('の探索サマリ「Run ID」が規定形式ではありません');
     return problems;
   }
+  if (!isValidRunIdTimestamp(runIdMatch[1])) {
+    problems.push('の探索サマリ「Run ID」の日時が成立しません');
+  }
   if (runIdMatch[2] !== check.id) {
     problems.push(`の探索サマリ「Run ID」のCheck IDが対象と一致しません（${runIdMatch[2]}）`);
   }
 
   if (check.explorationMode === 'PLAYWRIGHT_CLI') {
     const session = normalizeMarkdownCode(fields.get('Session') ?? '').toLowerCase();
-    if (!session.includes(runId.toLowerCase())) {
-      problems.push('の探索サマリ「Session」に同じRun IDが含まれていません');
+    const runIdLower = runId.toLowerCase();
+    if (session !== `explore-${runIdLower}` && session !== `heal-${runIdLower}`) {
+      problems.push('の探索サマリ「Session」が同じRun IDの規定session名ではありません');
     }
   }
-  if (artifacts !== 'なし' && !artifacts.includes(runId)) {
-    problems.push('の探索サマリ「Artifacts」に同じRun IDが含まれていません');
+  if (artifacts !== 'なし' && !artifactsReferenceRunId(artifacts, runId)) {
+    problems.push('の探索サマリ「Artifacts」に同じRun IDのpath segmentがありません');
   }
   return problems;
 }
@@ -696,8 +794,7 @@ export function validateExplorationSummary(check) {
   const normalizedRunEnvironment = normalizeContractToken(runEnvironment);
   const runEnvironmentIsComplete =
     check.explorationMode !== 'NONE' &&
-    !INCOMPLETE_EXPLORATION_VALUES.has(normalizedRunEnvironment) &&
-    !containsContractPlaceholder(runEnvironment);
+    !INCOMPLETE_EXPLORATION_VALUES.has(normalizedRunEnvironment);
   if (runEnvironmentIsComplete) {
     const artifacts = summary.fields.get('Artifacts') ?? '';
     problems.push(...validateRunEnvironment(check, runEnvironment, artifacts));
@@ -707,9 +804,12 @@ export function validateExplorationSummary(check) {
     for (const field of ['Run / 観測環境', '観測サマリ']) {
       const rawValue = summary.fields.get(field) ?? '';
       const value = normalizeContractToken(rawValue);
+      const hasPlaceholder = field === 'Run / 観測環境'
+        ? containsRunEnvironmentPlaceholder(rawValue)
+        : containsContractPlaceholder(rawValue);
       if (
         INCOMPLETE_EXPLORATION_VALUES.has(value) ||
-        containsContractPlaceholder(rawValue)
+        hasPlaceholder
       ) {
         problems.push(`はStatus=${check.status}ですが、探索サマリ「${field}」が未完了です`);
       }

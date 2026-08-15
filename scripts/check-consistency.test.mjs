@@ -635,7 +635,12 @@ test('外側pipeを省略したメタデータ表とStatus判定表を受け入�
 test('メタデータのParent Case IDは正確に1件だけ受け入れる', async (t) => {
   for (const [name, extraRow] of [
     ['重複key', '| Parent Case ID | E2E-TST-999 |'],
+    ['bold付き重複key', '| **Parent Case ID** | E2E-TST-999 |'],
+    ['link付き重複key', '| [Parent Case ID](https://example.test) | E2E-TST-999 |'],
+    ['HTML付き重複key', '| <strong>Parent Case ID</strong> | E2E-TST-999 |'],
+    ['entity付き重複key', '| Parent Case &#73;D | E2E-TST-999 |'],
     ['再掲header', '| 項目 | 値 |'],
+    ['装飾付き再掲header', '| **項目** | 値 |'],
     ['再掲delimiter', '|---|---|'],
   ]) {
     await t.test(name, () => {
@@ -657,7 +662,12 @@ test('メタデータのParent Case IDは正確に1件だけ受け入れる', as
 test('Test Status判定根拠の判定は正確に1件だけ受け入れる', async (t) => {
   for (const [name, extraRow] of [
     ['重複key', '| 判定 | ACTIVE |'],
+    ['bold付き重複key', '| **判定** | ACTIVE |'],
+    ['link付き重複key', '| [判定](https://example.test) | ACTIVE |'],
+    ['HTML付き重複key', '| <strong>判定</strong> | ACTIVE |'],
+    ['entity付き重複key', '| &#21028;&#23450; | ACTIVE |'],
     ['再掲header', '| 項目 | 値 |'],
+    ['装飾付き再掲header', '| **項目** | 値 |'],
     ['再掲delimiter', '|---|---|'],
   ]) {
     await t.test(name, () => {
@@ -675,6 +685,59 @@ test('Test Status判定根拠の判定は正確に1件だけ受け入れる', as
       assert.equal(check.judgement, undefined);
     });
   }
+});
+
+test('メタデータ節とTest Status判定根拠節は正確に1件だけ受け入れる', async (t) => {
+  await t.test('メタデータ節の重複', () => {
+    const config = buildCheck({
+      id: 'E2E-TST-001-PW-01',
+      checkMode: 'PW',
+      explorationMode: 'PLAYWRIGHT_CLI',
+    });
+    const content = buildDoc([config]).replace(
+      '\n\n## 2. Check一覧',
+      '\n\n## メタデータ\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-999 |\n\n## 2. Check一覧',
+    );
+
+    assert.equal(parseDesignDocContent(FILE_PATH, content).parentCaseId, undefined);
+  });
+
+  await t.test('Test Status判定根拠節の重複', () => {
+    const config = buildCheck({
+      id: 'E2E-TST-001-PW-01',
+      checkMode: 'PW',
+      explorationMode: 'PLAYWRIGHT_CLI',
+    });
+    config.section += '\n\n#### Test Status判定根拠\n\n| 項目 | 値 |\n|---|---|\n| 判定 | ACTIVE |';
+    const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+    assert.equal(check.judgement, undefined);
+  });
+});
+
+test('空行なしで始まるblockquoteをGFM表の終了として扱う', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  config.row += '\n> Check一覧の補足';
+  config.section = config.section
+    .replace(
+      '\n\n#### Test Status判定根拠',
+      '\n> 探索サマリの補足\n\n#### Test Status判定根拠',
+    )
+    .replace('| 判定 | DRAFT |', '| 判定 | DRAFT |\n> Status判定の補足');
+  const content = buildDoc([config]).replace(
+    '| Parent Case ID | E2E-TST-001 |',
+    '| Parent Case ID | E2E-TST-001 |\n> メタデータの補足',
+  );
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.equal(doc.parentCaseId, 'E2E-TST-001');
+  assert.equal(doc.checks.length, 1);
+  assert.equal(doc.checks[0]?.judgement, 'DRAFT');
+  assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
 });
 
 test('Check一覧の6列行をID形式にかかわらず検査対象へ残す', () => {

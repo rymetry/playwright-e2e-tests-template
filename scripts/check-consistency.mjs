@@ -178,23 +178,30 @@ function stripNonRenderedMarkdown(content) {
   }).join('\n');
 }
 
-function extractH2Section(content, headingPattern) {
+function extractH2Sections(content, headingPattern) {
   const lines = content.split('\n');
-  const headingIndex = lines.findIndex(
-    (line) => headingPattern.test(line),
-  );
-  if (headingIndex === -1) {
-    return '';
-  }
-
-  let endIndex = lines.length;
-  for (let index = headingIndex + 1; index < lines.length; index += 1) {
-    if (/^##\s/.test(lines[index] ?? '')) {
-      endIndex = index;
-      break;
+  const headingIndexes = [];
+  for (const [index, line] of lines.entries()) {
+    if (headingPattern.test(line)) {
+      headingIndexes.push(index);
     }
   }
-  return lines.slice(headingIndex + 1, endIndex).join('\n');
+
+  return headingIndexes.map((headingIndex) => {
+    let endIndex = lines.length;
+    for (let index = headingIndex + 1; index < lines.length; index += 1) {
+      if (/^##\s/.test(lines[index] ?? '')) {
+        endIndex = index;
+        break;
+      }
+    }
+    return lines.slice(headingIndex + 1, endIndex).join('\n');
+  });
+}
+
+function extractH2Section(content, headingPattern) {
+  const sections = extractH2Sections(content, headingPattern);
+  return sections.length === 1 ? sections[0] : '';
 }
 
 function extractCheckList(content) {
@@ -242,21 +249,29 @@ function extractCheckSectionIds(content) {
   return ids;
 }
 
-function extractSubsection(section, heading) {
+function extractSubsections(section, heading) {
   const lines = section.split('\n');
-  const headingIndex = lines.findIndex((line) => line.trim() === `#### ${heading}`);
-  if (headingIndex === -1) {
-    return undefined;
-  }
-
-  let endIndex = lines.length;
-  for (let i = headingIndex + 1; i < lines.length; i += 1) {
-    if (/^####\s/.test(lines[i] ?? '')) {
-      endIndex = i;
-      break;
+  const headingIndexes = [];
+  for (const [index, line] of lines.entries()) {
+    if (line.trim() === `#### ${heading}`) {
+      headingIndexes.push(index);
     }
   }
-  return lines.slice(headingIndex + 1, endIndex).join('\n');
+
+  return headingIndexes.map((headingIndex) => {
+    let endIndex = lines.length;
+    for (let i = headingIndex + 1; i < lines.length; i += 1) {
+      if (/^####\s/.test(lines[i] ?? '')) {
+        endIndex = i;
+        break;
+      }
+    }
+    return lines.slice(headingIndex + 1, endIndex).join('\n');
+  });
+}
+
+function extractSubsection(section, heading) {
+  return extractSubsections(section, heading)[0];
 }
 
 function parseMarkdownTableRow(line) {
@@ -312,6 +327,31 @@ function parseMarkdownTableRow(line) {
   return cells;
 }
 
+function isTableInterruptingBlock(line) {
+  let indentWidth = 0;
+  let contentStart = 0;
+  for (const [index, character] of [...line].entries()) {
+    if (character === ' ') {
+      indentWidth += 1;
+    } else if (character === '\t') {
+      indentWidth += 4 - (indentWidth % 4);
+    } else {
+      contentStart = index;
+      break;
+    }
+  }
+  if (indentWidth >= 4) {
+    return true;
+  }
+
+  const content = line.slice(contentStart).trimEnd();
+  return (
+    /^(?:>|#{1,6}(?:\s|$)|`{3,}|~{3,}|(?:[-+*]|\d+[.)])\s+)/.test(content) ||
+    /^(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/.test(content) ||
+    /^<(?:address|article|aside|blockquote|details|dialog|div|dl|fieldset|figure|footer|form|h[1-6]|header|hr|main|nav|ol|p|pre|section|table|ul)(?:\s|\/?>)/i.test(content)
+  );
+}
+
 function parseStrictMarkdownTable(content, expectedHeader) {
   const lines = content.split('\n');
   const headerIndex = lines.findIndex((line) => line.trim() !== '');
@@ -333,6 +373,9 @@ function parseStrictMarkdownTable(content, expectedHeader) {
 
   const rows = [];
   for (const line of lines.slice(delimiterIndex + 1)) {
+    if (line.trim() === '' || isTableInterruptingBlock(line)) {
+      break;
+    }
     const cells = parseMarkdownTableRow(line);
     if (cells === undefined) {
       break;
@@ -346,13 +389,19 @@ function parseStrictMarkdownTable(content, expectedHeader) {
 }
 
 function extractSingletonKeyValue(table, expectedKey) {
+  const normalizedExpectedKey = normalizeContractToken(expectedKey);
   if (
     !table.valid ||
-    table.rows.some(([key]) => key === '項目' || /^:?-{3,}:?$/.test(key))
+    table.rows.some(([key]) => (
+      normalizeContractToken(key) === normalizeContractToken('項目') ||
+      /^:?-{3,}:?$/.test(key)
+    ))
   ) {
     return undefined;
   }
-  const matchingRows = table.rows.filter(([key]) => key === expectedKey);
+  const matchingRows = table.rows.filter(
+    ([key]) => normalizeContractToken(key) === normalizedExpectedKey,
+  );
   return matchingRows.length === 1 ? matchingRows[0][1].trim() : undefined;
 }
 
@@ -470,11 +519,11 @@ function extractJudgement(section) {
   if (section === undefined) {
     return undefined;
   }
-  const body = extractSubsection(section, 'Test Status判定根拠');
-  if (body === undefined) {
+  const bodies = extractSubsections(section, 'Test Status判定根拠');
+  if (bodies.length !== 1) {
     return undefined;
   }
-  const table = parseStrictMarkdownTable(body, ['項目', '値']);
+  const table = parseStrictMarkdownTable(bodies[0], ['項目', '値']);
   return extractSingletonKeyValue(table, '判定');
 }
 

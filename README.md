@@ -12,10 +12,10 @@ Test Design Doc体系で設計・管理する。
    報告先URLを自リポジトリのSecurity Advisoriesへ変更する
 3. `cp .env.example .env` し、`E2E_BASE_URL` と `E2E_ALLOWED_ORIGINS` を
    対象環境に合わせる（本番環境をallowlistへ入れない）
-4. [test-designs/README.md](test-designs/README.md) 2.4のAreaレジストリに
-   自プロジェクトの機能領域を登録する
+4. [test-designs/README.md](test-designs/README.md) 2.4に従い、
+   [test-designs/areas.json](test-designs/areas.json)へ自プロジェクトの機能領域を登録する
 5. サンプル一式（`test-designs/e2e/demo/`、`test-designs/int/demo/`、
-   `e2e/demo/`、AreaレジストリのDEMO行）を削除する。
+   `e2e/demo/`、`test-designs/areas.json`のDEMO entry）を削除する。
    書き方の参考として一式を残してもよい
 6. CIを使う場合はGitHubのrepository variablesを設定する
    （`E2E_CI=true`・`E2E_BASE_URL`・`E2E_ALLOWED_ORIGINS`。「CI」の章を参照）
@@ -47,8 +47,9 @@ cp .env.example .env
 | `npm run test:headed` | ブラウザ表示付き実行 |
 | `npm run test:ui` | UIモード |
 | `npm run test:report` | 直近のHTMLレポート表示 |
+| `npm run create:test-design -- ...` | [管理ガイド6.0](test-designs/README.md#60-test-design-docの生成)に従い、1シナリオ1ファイルのDesign Docを生成 |
 | `npm run typecheck` | TypeScript型検査 |
-| `npm run check` | Design Doc／spec整合と両hostのskill構造を検査 |
+| `npm run check` | Design Doc／spec整合、Design Docの契約・生成test、両hostのskill構造を検査 |
 | `npm run check:skills` | Claude Code／Codexのskill構造だけを検査 |
 
 - `test:qualify` は `--grep`（Check ID）と `--project` の指定を必須とし、
@@ -112,7 +113,7 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 
 - 管理ルール（ID命名規則、Tier、Status、昇格条件、スイート拡張方針、
   コード実装方針〔インライン既定・POMはトリガー駆動〕）: [test-designs/README.md](test-designs/README.md)
-- Design Docテンプレート: [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md)
+- Design Doc生成方法とテンプレート構成: [test-designs/README.md](test-designs/README.md#60-test-design-docの生成)
 - 完成例（PW Check）: [test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md](test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md) と [e2e/demo/E2E-DEMO-001.spec.ts](e2e/demo/E2E-DEMO-001.spec.ts)
 - 完成例（API Check）: [test-designs/int/demo/INT-DEMO-001-docs-availability.md](test-designs/int/demo/INT-DEMO-001-docs-availability.md) と [e2e/demo/INT-DEMO-001.spec.ts](e2e/demo/INT-DEMO-001.spec.ts)
 
@@ -121,14 +122,15 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 ```
 test-designs/
   README.md              … 管理ルール（ID命名規則、Status、Qualification、拡張・実装方針）
-  templates/             … Design Docテンプレート
+  areas.json             … generator／checkerが参照するAreaレジストリの正本
+  templates/             … 共通部とmode別Checkの生成用テンプレート
   e2e/<area>/            … E2EレベルのDesign Doc
   int/<area>/            … IntegrationレベルのDesign Doc
 e2e/<area>/              … Playwright spec（INTも同じtestDir配下）
 skills/                  … 4 skillのhost中立な正本
 .claude/skills/          … 正本への相対symlink（Claude Code discovery）
 .agents/skills/          … 正本への相対symlink（Codex discovery）
-scripts/                 … 整合チェッカー等の運用スクリプト
+scripts/                 … Design Doc生成・整合チェッカー等の運用スクリプト
 .github/workflows/       … CI（check／typecheckは常時、E2Eはrepository variablesで有効化）
 playwright-report/       … 通常実行のHTMLレポート（Git管理外、実行ごとに上書き）
 qualification-reports/   … Qualificationのレポート（Git管理外、実行ごとに保存）

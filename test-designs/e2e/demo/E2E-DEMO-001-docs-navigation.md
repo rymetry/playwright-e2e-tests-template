@@ -123,16 +123,16 @@ Then:
 
 - 対象外（公開ドキュメントの構造が安定しており、既知の導線のみを扱うため）
 
-#### 探索で確認した事実
+#### 探索サマリ
 
 | 項目 | 値 |
 |---|---|
 | Exploration mode | `NONE` |
-| Tool / version | なし |
-| Browser | なし |
-| Session | なし |
+| Run / 観測環境 | なし（探索不要） |
+| 観測サマリ | なし（探索不要） |
+| 実装候補（レビュー対象） | なし |
+| 観測上の疑問・要判断 | なし |
 | Artifacts | なし |
-| 観測日時 | — |
 
 #### レビュー済みの期待値
 
@@ -164,4 +164,4 @@ Then:
 ## 4. 関連仕様
 
 - テンプレート運用ルール: `test-designs/README.md`
-- Design Docテンプレート: `test-designs/templates/test-design-doc-template.md`
+- Design Doc生成・記入規則: `test-designs/README.md` 6章

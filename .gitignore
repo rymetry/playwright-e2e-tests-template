@@ -14,6 +14,7 @@ playwright/.auth/*
 !playwright/.auth/.gitignore
 .playwright/profiles/
 .playwright/artifacts/
+.playwright/test-design-transactions/
 .playwright-cli/
 /playwright-cli/
 profiles/

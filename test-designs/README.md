@@ -24,6 +24,11 @@ Suite（機能領域 = Area）
 - **Check**: 「どう検証するか」の実行単位。同じシナリオでもPlaywright実行、
   Computer Use実行、Manual実行はそれぞれ別Checkとして設計する。
 
+テンプレートのソースは、Parent Case共通部とExecution mode別のCheck部品に分ける。
+`npm run create:test-design`が必要な部品を組み立て、最終成果物は必ず上記の
+**1シナリオ1ファイル**にする。テンプレート部品自体をDesign Docとして運用したり、
+手作業でコピー・結合したりしない。
+
 ## 2. ID命名規則
 
 ### 2.1 Parent Case ID
@@ -77,14 +82,20 @@ NNは2桁ゼロ埋め連番。例: `E2E-AUTH-001-PW-01`、`INT-ORDER-003-API-02`
 
 ### 2.4 Areaレジストリ
 
-新しいAreaコードはここに登録してから使用する。
+Areaの登録値は [areas.json](areas.json) を正本とする。新しいAreaコードは、対象領域を
+示す`name`と任意の`note`を追加してから使用する。generatorとcheckerは同じファイルを
+読み取るため、READMEとの二重管理は行わない。
 
-| Area | 対象領域 | 備考 |
-|---|---|---|
-| DEMO | サンプル（playwright.devを対象にした完成例） | 実プロジェクトでは削除可 |
+追加例:
 
-記入例（**未登録**。使用するには上の表へ正式な行として追加する）:
-`| AUTH | 認証・ログイン・セッション | |`
+```json
+{
+  "AUTH": {
+    "name": "認証・ログイン・セッション",
+    "note": ""
+  }
+}
+```
 
 ## 3. Tier（実行階層）
 
@@ -153,7 +164,8 @@ DRAFT → EVALUATING → ACTIVE ⇄ QUARANTINE → RETIRED
   実行ごとに別フォルダとなり上書きされない。Git管理外のローカル限定の
   補助資料（消失しうる）として扱い、閲覧は
   `npx playwright show-report qualification-reports/<dir>`で行う。
-  判定に使用していない古いフォルダは削除してよい
+  Status判定と一次証跡の記録が完了するまでは削除せず、完了後は継続調査に
+  不要であることを管理者が確認して手動削除してよい
 - `test:qualify`はPOSIX形式の環境変数設定を使うため、macOS／Linuxを前提と
   する（Windowsでは`cross-env`等が必要）
 
@@ -220,6 +232,9 @@ Qualificationを再実施する。
   baseURL相対のパスだけを使い、絶対URLをハードコードしない。
 - CU／MANUAL Checkでは、操作開始前に表示中のURL originが許可済み環境と
   一致することを確認し、結果を証跡へ残す。
+- CU Checkの操作は座標ではなく、利用者が識別できる画面要素と操作結果で記述する。
+  座標依存操作が不可避な場合だけ、使用理由、解像度、表示倍率、ウィンドウ位置、
+  基準画像またはアンカー要素、操作後の観測可能な完了条件を記録する。
 - 認証情報をterminal、artifact、Test Design Docへ出力しない。
 
 ## 6. 運用フロー
@@ -227,35 +242,131 @@ Qualificationを再実施する。
 Doc作成は `test-design`、探索は `explore` workflowで実行できる。ホスト別の
 明示起動方法は [AGENTS.md](../AGENTS.md) を参照する。機能の理解度に応じて
 2パターンを使い分ける。
-**どちらもDoc（ID採番）が先**であり、探索結果は常にDocへ着地する。
+**どちらもDoc（ID採番）が先**であり、探索結果のうち設計・実装・healに必要な
+内容は「探索サマリ」へ着地する。探索中の全試行や全出力は保存対象としない。
+
+### 6.0 Test Design Docの生成
+
+テンプレートの構成は次のとおり。
+
+```text
+test-designs/templates/
+├── test-design-doc-template.md
+└── checks/
+    ├── pw-check-template.md
+    ├── api-check-template.md
+    ├── cu-check-template.md
+    └── mn-check-template.md
+```
+
+- `test-design-doc-template.md`: メタデータ、目的、品質リスク、Check一覧、関連仕様の共通部
+- `checks/*.md`: modeごとの完全なCheck構造。別のCheckテンプレートを参照して補完しない
+- `scripts/create-test-design.mjs`: Check一覧、Check ID、章番号、探索サマリ初期値を構成する
+
+直接コピーする代わりに、次の生成コマンドを使用する。
+
+```bash
+npm run create:test-design -- \
+  --parent-id E2E-DEMO-002 \
+  --title "検索結果を確認する" \
+  --slug search-results \
+  --check PW:SMOKE:PLAYWRIGHT_CLI
+```
+
+`--check`は`<MODE>:<TIER>:<EXPLORATION_MODE>`形式で複数指定できる。同じMODEを
+複数指定した場合は`-01`、`-02`の順に採番する。Exploration modeを`NONE`にする
+場合は、理由を推測で生成しないよう、第4要素へ具体的理由を指定する。`理由`、
+`TBD`、`TODO`、`未記入`、`未定`、`なし`は具体的理由として扱わない。
+
+```bash
+--check API:REGRESSION:NONE:契約仕様だけで期待結果を確定できるため
+```
+
+生成先は命名規則から自動決定され、Parent CaseごとにMarkdownを1ファイルだけ作る。
+同じParent Case IDの既存Docがある場合は、slugが異なっても生成を拒否する。生成後、
+`test-design` workflowがケース固有の本文を記入し、`npm run check`で構造と整合性を
+検証する。生成中に異常終了した場合は、次回実行がGit管理外の内部transactionから
+完成済み内容だけを原子的に公開する。利用者や管理者によるlock管理は不要である。
+
+Exploration modeはCheck modeごとに次の値だけを使用する。
+
+| Check mode | Exploration mode | 意味 |
+|---|---|---|
+| PW | `NONE` / `PLAYWRIGHT_CLI` | 探索不要、またはPlaywright CLIによるbrowser探索 |
+| API | `NONE` / `API_INTEGRATION` | 探索不要、またはAPI／サービス層の統合挙動の直接探索 |
+| CU | `NONE` / `COMPUTER_USE` | 探索不要、またはComputer Useによる画面探索 |
+| MN | `NONE` / `MANUAL` | 探索不要、または人による確認 |
+
+`API_INTEGRATION`は、API／サービス層のrequest、response、認証、永続状態、副作用、
+外部サービス連携を直接探索するmodeとする。使用したAPIクライアントやtoolはmode名へ
+含めず、探索サマリの「Run / 観測環境」へ記録する。
+
+各Checkの探索サマリは次の6項目を持つ。
+
+| 項目 | 役割 |
+|---|---|
+| Exploration mode | Check一覧と同じmode |
+| Run / 観測環境 | Run ID、tool/version、browser/app/actor、session、観測日時 |
+| 観測サマリ | 経路、状態遷移、動的値、外部依存、失敗しやすい操作 |
+| 実装候補（レビュー対象） | Locator、完了条件、データ準備等の未確定候補 |
+| 観測上の疑問・要判断 | 意図確認や仕様判断が必要な内容 |
+| Artifacts | なし、または必要最小限のRun IDと相対path |
+
+- `NONE`: Run / 観測環境と観測サマリは`なし（探索不要）`、その他は`なし`とする。
+  探索不要の具体的な理由は「探索目的」だけに記録する
+- 未探索のDRAFT: Run / 観測環境は`未実施`、観測サマリ・実装候補・疑問は
+  `未記入（探索後に本記入）`、Artifactsは`なし`とする
+- 探索直後: 実装候補と疑問を記録できるが、正式な設計・期待値とは扱わない
+- レビュー準備完了: 実装候補は`反映済み（反映先）`または`なし`、疑問は`なし`とする
+
+探索後は、候補をCheck modeに応じてシナリオ、Assertion設計、テストデータ、Fixture、
+前処理、実行契約、操作手順、判定基準等へ反映する。反映しない候補は除去し、疑問を
+解消してからDoc全体と期待値を人間がレビューし、その後に実装へ進む。
+
+探索は全Checkの必須工程ではない。仕様や既存契約から期待結果と実装条件を確定できる
+場合は`NONE`を選び、具体的な探索不要理由を記録して探索工程を省略する。非`NONE`を
+選んだCheckはDRAFT中の未実施を許可するが、EVALUATINGへ進める前に探索を完了し、
+Runと観測結果を探索サマリへ記録する。
 
 **パターン1: 機能・仕様がわかっている場合**
 
 1. Doc作成（目的・シナリオ・期待値案まで記入。根拠のない期待値は書かない）
-2. 探索で到達経路・Locator候補・待機条件を確認し、観測事実を記録する
-3. 観測を踏まえDocを修正する
-4. 期待値レビュー（人間）: Docと仕様の突合。根拠欄に仕様・Issue等を記録する
+2. 必要な場合だけ、探索で到達経路・Locator候補・待機条件を確認し、探索サマリを記録する
+3. 探索した場合は、観測を踏まえ実装候補を正式な設計項目へ反映し、疑問を解消する
+4. 期待値レビュー（人間）: Doc全体と仕様の突合。根拠欄に仕様・Issue等を記録する
 5. 実装しStatusをEVALUATINGへ → Qualification → ACTIVE
 
 **パターン2: 機能がわからない場合**
 
 1. Doc骨格作成（ID採番＋機能名＋探索目的のみ。DRAFT中はslug変更可、IDは不変）
-2. 探索し、観測事実を記録する
-3. 観測をもとにDocを本記入する
+2. 探索し、探索サマリを記録する
+3. 観測をもとにDocを本記入し、実装候補を正式な設計項目へ反映する
 4. 期待値レビュー（人間）: **観測された挙動が意図された挙動かを確認する**。
    観測をそのまま期待値にすると、バグまで仕様として固定されるため、
    このパターンではレビューの重要度が上がる。根拠欄に「観測＋意図確認」の旨を
    記録する
 5. 実装しStatusをEVALUATINGへ → Qualification → ACTIVE
 
-**探索の保存先規約**
+**探索と補助証跡の保存先・削除規約**
 
-- 生成物（screenshot等）は `.playwright/artifacts/<Run ID>/` へ置く（Git管理外）。
-  Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。例外として、ヒール（6.1）の
+- 探索・healで生成した補助証跡は `.playwright/artifacts/<Run ID>/` へ保存する
+  （Git管理外）。`exploration.md`を作成した場合もこのフォルダへ保存するが、作成は
+  必須ではない。目的のない補助証跡や秘密情報を含む補助証跡は生成しない
+- 探索Run IDは `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の一意suffix>` 形式とし、
+  sessionにも同じRun IDを使用する。時刻だけに依存せず、同じCheckの再実行・並行探索で
+  Artifactフォルダとsessionが衝突しないようにする。例外として、ヒール（6.1）の
   証跡退避は複数Checkを一括で扱うため `YYYYMMDD-HHmm_heal` 形式
   （同名がある場合は連番を付す）を使う
 - DocのArtifacts欄にはRun IDと必要最小限の相対pathだけを記録する
-- 探索結果は「探索で確認した事実」節にのみ書き、期待値欄には書かない
+- 探索結果は「探索サマリ」節にのみ書き、期待値欄には書かない
+- 一次記録はDocのTest Status判定根拠、レビュー済み期待値、Status、原因・対処の
+  テキスト記録とする。探索Artifact、healで退避した元失敗証跡、Qualificationレポートは
+  Git管理外のローカル補助証跡（消失しうる）として扱い、実在をDocの有効条件にしない
+- workflowは補助証跡を自動削除しない。探索ArtifactはDoc反映と人間レビュー、healの
+  補助証跡は分類・処置・Status決定・必要な再Qualification・完了報告、Qualification
+  レポートは一次記録とStatus判定が完了するまで削除しない。完了後は、継続調査に
+  不要であることを管理者が確認し、Run IDまたはQualificationレポートのフォルダ単位で
+  手動削除してよい。一律の保存期限は設けない
 
 完成例として、`test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md` と
 対応する `e2e/demo/E2E-DEMO-001.spec.ts`（PW Check）、
@@ -268,8 +379,8 @@ Doc作成は `test-design`、探索は `explore` workflowで実行できる。�
 [heal skill](../skills/heal/SKILL.md) で行う。
 ヒールは実行時の自己修復ではなく**保守時のワークフロー**であり、次の順で進む。
 
-1. 失敗の収集（直近実行の全失敗）と証跡確保。元の失敗記録は上書き・削除しない
-   （再現実行の前に既存の実行成果物を退避する）
+1. 失敗の収集（直近実行の全失敗）と証跡確保。activeなheal中は元の失敗記録と
+   補助証跡を上書き・削除しない（再現実行の前に既存の実行成果物を退避する）
 2. 根本原因クラスタへのグループ化と、証跡ベースの分類
 3. ルーティング: ヒールが修正してよいのは**Locator・待機条件・テストデータ準備**
    の3領域のみ。プロダクト不具合の疑いは修復せず報告（QUARANTINE化を提案）、
@@ -305,7 +416,8 @@ API Checkの修復は、観測を要しないテストデータ不備のみを�
    Locatorへの置換
 7. シナリオのステップ省略、別経路で最終状態だけ合わせる変更
 8. プロダクト不具合をテスト変更で吸収すること
-9. Qualification記録・失敗証跡の書き換え・削除
+9. 一次記録の書き換え・削除、およびactiveなheal／Qualification中の補助証跡の
+   上書き・削除（完了後の管理者による補助証跡の手動削除は6章の規約に従い許可する）
 10. assertionを条件分岐・早期return・例外の握り潰しなどで実行されない経路へ
     置く変更、および未await化・`test.fail()`・`test.fixme()`などによる
     結果の無効化

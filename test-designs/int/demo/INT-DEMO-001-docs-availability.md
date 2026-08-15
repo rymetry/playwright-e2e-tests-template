@@ -1,7 +1,7 @@
 <!--
-このファイルはAPI Checkの記入例（サンプル）です。テンプレート3.2の省略表現を
-3.1と同じ構造へ完全展開する方法を、playwright.devの公開ドキュメントを対象に
-実演しています。実プロジェクトでは削除してください。
+このファイルはAPI Checkの記入例（サンプル）です。mode別のAPI Checkテンプレートを
+playwright.devの公開ドキュメント向けに本記入した完成形を示します。
+実プロジェクトでは削除してください。
 -->
 
 # INT-DEMO-001 ドキュメント配信（API）
@@ -134,16 +134,16 @@ Then:
 - 対象外（公開ドキュメントの配信を既知のURLで確認するのみで、
   UI状態・待機条件の探索を要しないため）
 
-#### 探索で確認した事実
+#### 探索サマリ
 
 | 項目 | 値 |
 |---|---|
 | Exploration mode | `NONE` |
-| Tool / version | なし |
-| Browser | なし |
-| Session | なし |
+| Run / 観測環境 | なし（探索不要） |
+| 観測サマリ | なし（探索不要） |
+| 実装候補（レビュー対象） | なし |
+| 観測上の疑問・要判断 | なし |
 | Artifacts | なし |
-| 観測日時 | — |
 
 #### レビュー済みの期待値
 
@@ -179,6 +179,6 @@ EVALUATINGを維持し、原因を記録する。
 ## 4. 関連仕様
 
 - テンプレート運用ルール: `test-designs/README.md`
-- Design Docテンプレート: `test-designs/templates/test-design-doc-template.md`
+- Design Doc生成・記入規則: `test-designs/README.md` 6章
 - 関連するTest Design: `test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md`
   （同じ対象へのUI導線の保証。役割分担は本書3.1の実行契約を参照）

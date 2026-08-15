@@ -17,8 +17,9 @@ shell commandもrepository rootをworking directoryとして実行する。
 ## 前提
 
 まず `test-designs/README.md` の命名規則（2章）・Status（4章）・共通の安全規則
-（5章）・運用フロー（6章）を読み、従う。テンプレートは
-`test-designs/templates/test-design-doc-template.md`。
+（5章）・運用フローとDoc生成方法（6章）を読み、従う。テンプレート部品を
+手作業でコピー・結合せず、`npm run create:test-design`で1シナリオ1ファイルの
+Design Docを生成する。
 
 入力の解釈:
 
@@ -30,35 +31,34 @@ shell commandもrepository rootをworking directoryとして実行する。
 
 ## 手順
 
-1. **Areaレジストリ確認**: README 2.4のレジストリに指定AREAがあるか確認する。
+1. **Areaレジストリ確認**: README 2.4に従い、`test-designs/areas.json`に
+   指定AREAがあるか確認する。
    未登録なら対象領域の説明を添えて登録を提案し、ユーザーの承認後に
-   レジストリへ追記してから進める。
+   `areas.json`へ追記してから進める。
 2. **ID採番**: 既存の全DocのCheck IDを走査し、同一LEVEL・AREA内で最大の
    SEQ+1を新しいParent Case IDとする。欠番・RETIRED済みIDは再利用しない。
    SEQが999に達している場合は採番せず、AREAの分割等をユーザーへ相談して
    停止する。
-3. **配置**: テンプレートを
-   `test-designs/<level小文字>/<area小文字>/<ID>-<slug>.md` へコピーする。
-   **IDは大文字（例: `E2E-AUTH-001`）、ディレクトリ名は必ずASCII小文字
-   （例: `test-designs/e2e/auth/`）**。大文字のディレクトリは整合チェッカーの
-   走査対象外となり誤ってPASSするため厳禁。slugは英小文字ケバブケース
-   （`--skeleton`時は仮slugでよい。DRAFTの間は変更可、IDは不変）。
-4. **IDとplaceholderの全置換（`--skeleton`でも必須）**: テンプレート内の
-   `XXX-AREA-000` を含む**すべての箇所**を実IDへ置換する。最低限の対象:
-   - H1見出しとメタデータ表のParent Case ID
-   - Check一覧の各行のCheck IDとCodeパス
-   - 各Checkの節見出し（`### 3.x <Check ID>: ...`。未置換だと整合チェッカーが
-     判定行を見つけられず失敗する）
-   - 各Checkの判定根拠表の「判定」行（placeholderの選択肢表記を`DRAFT`へ）
-   - TierとExploration modeは実値を1つ選んで記入する（`SMOKE／REGRESSION`の
-     ような選択肢表記のまま残さない）。判断できない場合はユーザーに確認する。
-     探索を予定するPW Checkは`PLAYWRIGHT_CLI`とする
-   - テンプレート冒頭のHTMLコメントを削除する
-5. **Execution modeの確定**: 使用するmodeはシナリオとユーザーの入力から判断し、
-   判断できない場合は確認する。使用しないmodeのCheckブロック（3.x）と
-   Check一覧の対応行を削除する。**APIを使用する場合**、テンプレート3.2は
-   省略表現のため、3.1と同じ見出し・表構造（Test Status判定根拠表を含む）を
-   API用の読み替え（Assertion対象、実行契約等）を適用して完全展開する。
+3. **生成条件の確定**: slug、Execution mode、Tier、Exploration modeを決める。
+   判断できない場合はユーザーに確認する。slugは英小文字ケバブケース
+   （`--skeleton`時は仮slugでよい。DRAFTの間は変更可、IDは不変）。探索を予定する
+   PW Checkは`PLAYWRIGHT_CLI`、API Checkは`API_INTEGRATION`、CU Checkは
+   `COMPUTER_USE`、MN Checkは`MANUAL`とする。探索不要なら`NONE`とし、
+   「探索目的」へ記録する具体的理由も確定する。理由を推測で発明しない。
+4. **Doc生成（`--skeleton`でも必須）**: README 6.0の形式で
+   `npm run create:test-design`を実行する。各Checkは次の形式で指定する。
+   - 探索あり: `--check PW:SMOKE:PLAYWRIGHT_CLI`
+   - 探索なし: `--check API:REGRESSION:NONE:<具体的な探索不要理由>`
+   - 同じExecution modeに複数Checkが必要なら`--check`を繰り返す
+
+   生成処理がH1、メタデータ、Check一覧、Check ID、章番号、Codeパス、探索サマリ、
+   判定`DRAFT`を一括構成する。生成先は
+   `test-designs/<level小文字>/<area小文字>/<ID>-<slug>.md`であり、既存ファイルは
+   上書きしない。生成後のMarkdownだけをDesign Docとして扱い、
+   `test-designs/templates/`の部品は成果物として扱わない。
+5. **生成結果の構造確認**: 指定したCheckだけがCheck一覧とCheck設計に同じ順序で
+   生成され、Check ID、章番号、mode、Tier、探索サマリ初期値が一致することを確認する。
+   mode別Checkは完全な構造で生成されるため、他modeの節を参照して補完しない。
 6. **本文記入**:
    - 通常モード（パターン1）: ユーザーが提供した仕様・Issue・受入条件をもとに
      目的・品質リスク・シナリオ・Assertion案・テストデータ・前提条件を記入する。
@@ -67,6 +67,8 @@ shell commandもrepository rootをworking directoryとして実行する。
    - `--skeleton`モード（パターン2）: メタデータ・Check一覧・探索目的だけを
      記入する。未記入の節は雛形の汎用文（実ケースの期待値に見える文）を
      残さず、本文を `未記入（探索後に本記入）` へ置換する。
+   - 探索サマリの初期値は生成処理が確定する。本文記入時に探索modeと状態が変わらない
+     限り、手作業で別の初期状態へ書き換えない
 7. **検証**: `npm run check` を実行しPASSすることを確認する。
 8. **報告**: 作成したID・ファイルパス・次のステップを提示する。
    探索が必要なら、対象Check IDを添えて `explore` workflowの明示起動をユーザーへ

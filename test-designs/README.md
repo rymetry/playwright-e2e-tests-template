@@ -287,10 +287,10 @@ Exploration modeはCheck modeごとに次の値だけを使用する。
 
 **探索と補助証跡の保存先・削除規約**
 
-- 必要な生成物（screenshot等）だけを `.playwright/artifacts/<Run ID>/` へ置く
-  （Git管理外）。`exploration.md`は必須成果物とせず、必要時だけ同じライフサイクルの
-  補助証跡として置く。
-  Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。例外として、ヒール（6.1）の
+- 探索・healで生成した補助証跡は `.playwright/artifacts/<Run ID>/` へ保存する
+  （Git管理外）。`exploration.md`を作成した場合もこのフォルダへ保存するが、作成は
+  必須ではない。目的のない補助証跡や秘密情報を含む補助証跡は生成しない
+- Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。例外として、ヒール（6.1）の
   証跡退避は複数Checkを一括で扱うため `YYYYMMDD-HHmm_heal` 形式
   （同名がある場合は連番を付す）を使う
 - DocのArtifacts欄にはRun IDと必要最小限の相対pathだけを記録する
@@ -298,10 +298,11 @@ Exploration modeはCheck modeごとに次の値だけを使用する。
 - 一次記録はDocのTest Status判定根拠、レビュー済み期待値、Status、原因・対処の
   テキスト記録とする。探索Artifact、healで退避した元失敗証跡、Qualificationレポートは
   Git管理外のローカル補助証跡（消失しうる）として扱い、実在をDocの有効条件にしない
-- 探索ArtifactはDoc反映と人間レビュー、healの補助証跡は分類・処置・Status決定・
-  必要な再Qualification・完了報告、Qualificationレポートは一次記録とStatus判定が
-  完了するまで削除しない。完了後は、継続調査に不要であることを管理者が確認して
-  手動削除してよい。自動削除や一律の保存期限は設けない
+- workflowは補助証跡を自動削除しない。探索ArtifactはDoc反映と人間レビュー、healの
+  補助証跡は分類・処置・Status決定・必要な再Qualification・完了報告、Qualification
+  レポートは一次記録とStatus判定が完了するまで削除しない。完了後は、継続調査に
+  不要であることを管理者が確認し、Run IDまたはQualificationレポートのフォルダ単位で
+  手動削除してよい。一律の保存期限は設けない
 
 完成例として、`test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md` と
 対応する `e2e/demo/E2E-DEMO-001.spec.ts`（PW Check）、

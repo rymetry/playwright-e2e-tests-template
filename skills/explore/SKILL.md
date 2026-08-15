@@ -87,9 +87,11 @@ shell commandもrepository rootをworking directoryとして実行する。
      `localstorage-get`等）は行わない。query文字列の値は記録前に除去する。
      `console`は秘密情報を含まないと確認できる範囲でのみ記録する
    - 失敗しやすい操作、動的な値
-5. 生成物（screenshot等）は必要な場合だけ最小限作成し、
-   `.playwright/artifacts/<Run ID>/` へ保存する。`exploration.md`は必須としない。
-   Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。このディレクトリはGit管理外
+5. 探索で生成した補助証跡（screenshot等）は
+   `.playwright/artifacts/<Run ID>/` へ保存する。`exploration.md`を作成した場合も
+   同じフォルダへ保存するが、作成は必須ではない。目的のない補助証跡や秘密情報を
+   含む補助証跡は生成しない。Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。
+   このディレクトリはGit管理外で、workflowは削除しない
 6. 対象がPlaywright CLIで十分に観測できない場合（Canvas描画、OS UI、
    ブラウザ拡張機能等）は、無理に続けず、観測できた範囲とCOMPUTER_USE探索が
    必要である旨を報告して終了する

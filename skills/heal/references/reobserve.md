@@ -36,8 +36,9 @@ playwright-cli commandを直接実行する。browser／network操作は通常�
    cleanup可能な場合だけ行う。既存・共有データや対象不明なデータは変更しない
 5. networkはmethod／origin／path／statusだけを記録する。headers、body、cookie、storage、
    query値、秘密を取得・記録しない
-6. 必要最小限のartifactをGit管理外の`.playwright/artifacts/`へ保存する。すべての正常終了、
-   停止、error経路でsessionをcloseし、作成したテストデータをcleanupする
+6. 再観測で生成したartifactはGit管理外の`.playwright/artifacts/<Run ID>/`へ保存し、
+   activeなheal中は削除しない。目的のないartifactや秘密情報を含むartifactは生成しない。
+   すべての正常終了、停止、error経路でsessionをcloseし、作成したテストデータをcleanupする
 
 ## healへ返す観測記録
 

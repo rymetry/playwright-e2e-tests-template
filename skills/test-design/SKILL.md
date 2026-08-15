@@ -31,9 +31,10 @@ Design Docを生成する。
 
 ## 手順
 
-1. **Areaレジストリ確認**: README 2.4のレジストリに指定AREAがあるか確認する。
+1. **Areaレジストリ確認**: README 2.4に従い、`test-designs/areas.json`に
+   指定AREAがあるか確認する。
    未登録なら対象領域の説明を添えて登録を提案し、ユーザーの承認後に
-   レジストリへ追記してから進める。
+   `areas.json`へ追記してから進める。
 2. **ID採番**: 既存の全DocのCheck IDを走査し、同一LEVEL・AREA内で最大の
    SEQ+1を新しいParent Case IDとする。欠番・RETIRED済みIDは再利用しない。
    SEQが999に達している場合は採番せず、AREAの分割等をユーザーへ相談して

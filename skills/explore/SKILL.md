@@ -66,7 +66,9 @@ shell commandもrepository rootをworking directoryとして実行する。
 
 ## 探索の手順
 
-1. 専用sessionを使う: `playwright-cli -s=explore-<check-id小文字> open <URL>`。
+1. 起動ごとにRun IDを
+   `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の一意suffix>`形式で生成する。
+   専用sessionは `playwright-cli -s=explore-<Run ID小文字> open <URL>` とする。
    **以後のすべてのplaywright-cliコマンドに同じ`-s=`を付ける**
 2. **originの再確認**: open直後、redirect・navigationが起きるたび、および
    データを変更する操作の直前に、現在のURL origin（コマンド出力のPage URL、
@@ -90,7 +92,7 @@ shell commandもrepository rootをworking directoryとして実行する。
 5. 探索で生成した補助証跡（screenshot等）は
    `.playwright/artifacts/<Run ID>/` へ保存する。`exploration.md`を作成した場合も
    同じフォルダへ保存するが、作成は必須ではない。目的のない補助証跡や秘密情報を
-   含む補助証跡は生成しない。Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。
+   含む補助証跡は生成しない。Run IDは手順1で生成した値を使用する。
    このディレクトリはGit管理外で、workflowは削除しない
 6. 対象がPlaywright CLIで十分に観測できない場合（Canvas描画、OS UI、
    ブラウザ拡張機能等）は、無理に続けず、観測できた範囲とCOMPUTER_USE探索が

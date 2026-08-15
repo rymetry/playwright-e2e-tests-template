@@ -12,10 +12,10 @@ Test Design Doc体系で設計・管理する。
    報告先URLを自リポジトリのSecurity Advisoriesへ変更する
 3. `cp .env.example .env` し、`E2E_BASE_URL` と `E2E_ALLOWED_ORIGINS` を
    対象環境に合わせる（本番環境をallowlistへ入れない）
-4. [test-designs/README.md](test-designs/README.md) 2.4のAreaレジストリに
-   自プロジェクトの機能領域を登録する
+4. [test-designs/README.md](test-designs/README.md) 2.4に従い、
+   [test-designs/areas.json](test-designs/areas.json)へ自プロジェクトの機能領域を登録する
 5. サンプル一式（`test-designs/e2e/demo/`、`test-designs/int/demo/`、
-   `e2e/demo/`、AreaレジストリのDEMO行）を削除する。
+   `e2e/demo/`、`test-designs/areas.json`のDEMO entry）を削除する。
    書き方の参考として一式を残してもよい
 6. CIを使う場合はGitHubのrepository variablesを設定する
    （`E2E_CI=true`・`E2E_BASE_URL`・`E2E_ALLOWED_ORIGINS`。「CI」の章を参照）

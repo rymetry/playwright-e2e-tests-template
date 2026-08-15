@@ -18,7 +18,7 @@
  * チェックルール一覧:
  *   No.1 Parent Case ID・Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>[-<MODE>-<NN>]）に従っている
  *   No.2 Parent Case ID・Check IDが全Docを通して重複せず、Check一覧と詳細節が対応する
- *   No.3 Check一覧のStatus・Tierが正しい値で、Docファイル名がParent Case IDで始まる
+ *   No.3 Check一覧のExecution mode・Status・Tierが正しい値で、Docファイル名がParent Case IDで始まる
  *   No.4 Check一覧のStatusと、各Checkの「Test Status判定根拠」表の判定が一致する
  *   No.5 PW/API CheckはStatusに応じてspecが存在する（EVALUATING以上=必須、RETIRED=禁止）
  *   No.6 Status=QUARANTINEとテストの@quarantineタグが両方向で一致する
@@ -37,16 +37,20 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  containsContractPlaceholder,
+  EXECUTION_MODE_BY_CHECK_MODE,
   isConcreteNoneReason,
   normalizeContractToken,
+  parseAreaRegistryContent,
   VALID_EXPLORATION_MODES_BY_CHECK_MODE,
 } from './test-design-contract.mjs';
 
 // このスクリプトはscripts/直下に置かれる前提。親ディレクトリ=リポジトリルート
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const AREA_REGISTRY_PATH = join(ROOT, 'test-designs', 'areas.json');
 
 // test-designs/README.md 2章の命名規則と対応する正規表現
-const PARENT_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}$/;
+const PARENT_ID_PATTERN = /^(E2E|INT)-([A-Z]{2,6})-\d{3}$/;
 const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}$/;
 // 行内からCheck IDらしき文字列を拾うための緩い版（specタイトル検索用）
 const CHECK_ID_LOOSE = /(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}/;
@@ -271,6 +275,7 @@ export function parseDesignDocContent(filePath, content) {
     const section = sections[0];
     checks.push({
       id,
+      executionMode: normalizeMarkdownCode(cells[2] ?? ''),
       explorationMode: normalizeMarkdownCode(cells[3] ?? ''),
       tier: cells[4] ?? '',
       status: cells[5] ?? '',
@@ -319,6 +324,14 @@ export function findDuplicateParentCaseIds(docs) {
   return duplicates;
 }
 
+export function validateParentCaseArea(parentCaseId, registeredAreas) {
+  const area = parentCaseId?.match(PARENT_ID_PATTERN)?.[2];
+  if (area === undefined || registeredAreas.has(area)) {
+    return [];
+  }
+  return [`Parent Case ID「${parentCaseId}」のArea「${area}」がAreaレジストリにありません`];
+}
+
 /**
  * 「### 3.x <Check ID>: ...」見出しから次の同レベル見出しまでを切り出し、
  * その範囲内の「| 判定 | XXX |」行から判定値を取り出す。
@@ -340,6 +353,16 @@ function extractJudgement(section) {
 
 export function validateExplorationSummary(check) {
   const problems = [];
+  const expectedExecutionMode = EXECUTION_MODE_BY_CHECK_MODE.get(check.mode);
+  if (
+    expectedExecutionMode !== undefined &&
+    check.executionMode !== expectedExecutionMode
+  ) {
+    problems.push(
+      `のExecution modeが不一致です（Check mode=${check.mode}では` +
+      `${expectedExecutionMode}が必要ですが、${check.executionMode}です）`,
+    );
+  }
   const sectionCount = check.sectionCount ?? (check.section === undefined ? 0 : 1);
   if (sectionCount !== 1) {
     problems.push(`のCheck節は1件必要です（現在: ${sectionCount}件）`);
@@ -400,14 +423,22 @@ export function validateExplorationSummary(check) {
 
   if (check.explorationMode !== 'NONE' && check.status !== 'DRAFT') {
     for (const field of ['Run / 観測環境', '観測サマリ']) {
-      const value = normalizeContractToken(summary.fields.get(field) ?? '');
-      if (INCOMPLETE_EXPLORATION_VALUES.has(value)) {
+      const rawValue = summary.fields.get(field) ?? '';
+      const value = normalizeContractToken(rawValue);
+      if (
+        INCOMPLETE_EXPLORATION_VALUES.has(value) ||
+        containsContractPlaceholder(rawValue)
+      ) {
         problems.push(`はStatus=${check.status}ですが、探索サマリ「${field}」が未完了です`);
       }
     }
 
     const candidate = summary.fields.get('実装候補（レビュー対象）') ?? '';
-    if (candidate !== 'なし' && !/^反映済み（.+）$/.test(candidate)) {
+    const reflectedTarget = candidate.match(/^反映済み（(.+)）$/)?.[1];
+    if (
+      candidate !== 'なし' &&
+      (reflectedTarget === undefined || containsContractPlaceholder(reflectedTarget))
+    ) {
       problems.push(
         `はStatus=${check.status}ですが、実装候補が「反映済み（反映先）」または「なし」ではありません`
       );
@@ -415,6 +446,10 @@ export function validateExplorationSummary(check) {
     const question = summary.fields.get('観測上の疑問・要判断') ?? '';
     if (question !== 'なし') {
       problems.push(`はStatus=${check.status}ですが、観測上の疑問・要判断が解消されていません`);
+    }
+    const artifacts = summary.fields.get('Artifacts') ?? '';
+    if (artifacts !== 'なし' && containsContractPlaceholder(artifacts)) {
+      problems.push(`はStatus=${check.status}ですが、探索サマリ「Artifacts」が未完了です`);
     }
   }
 
@@ -466,6 +501,7 @@ function parseSpecTitles(filePath) {
 // ---------------------------------------------------------------------------
 
 function main() {
+  const registeredAreas = parseAreaRegistryContent(readFileSync(AREA_REGISTRY_PATH, 'utf8'));
   // Step 1: Doc収集（templates/と_archive/は対象外のため、e2e/intディレクトリのみ走査）
   const docFiles = [
     ...listFiles(join(ROOT, 'test-designs', 'e2e'), '.md'),
@@ -513,6 +549,10 @@ function main() {
     if (!PARENT_ID_PATTERN.test(doc.parentCaseId)) {
       report(docPath, `Parent Case ID「${doc.parentCaseId}」が命名規則に従っていません`);
       continue;
+    }
+
+    for (const problem of validateParentCaseArea(doc.parentCaseId, registeredAreas)) {
+      report(docPath, problem);
     }
 
     // ルールNo.3（後半）: ファイル名は「<Parent Case ID>-<slug>.md」形式

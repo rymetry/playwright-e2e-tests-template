@@ -82,14 +82,20 @@ NNは2桁ゼロ埋め連番。例: `E2E-AUTH-001-PW-01`、`INT-ORDER-003-API-02`
 
 ### 2.4 Areaレジストリ
 
-新しいAreaコードはここに登録してから使用する。
+Areaの登録値は [areas.json](areas.json) を正本とする。新しいAreaコードは、対象領域を
+示す`name`と任意の`note`を追加してから使用する。generatorとcheckerは同じファイルを
+読み取るため、READMEとの二重管理は行わない。
 
-| Area | 対象領域 | 備考 |
-|---|---|---|
-| DEMO | サンプル（playwright.devを対象にした完成例） | 実プロジェクトでは削除可 |
+追加例:
 
-記入例（**未登録**。使用するには上の表へ正式な行として追加する）:
-`| AUTH | 認証・ログイン・セッション | |`
+```json
+{
+  "AUTH": {
+    "name": "認証・ログイン・セッション",
+    "note": ""
+  }
+}
+```
 
 ## 3. Tier（実行階層）
 
@@ -261,9 +267,9 @@ test-designs/templates/
 
 ```bash
 npm run create:test-design -- \
-  --parent-id E2E-AUTH-001 \
-  --title "ログイン成功" \
-  --slug login-success \
+  --parent-id E2E-DEMO-002 \
+  --title "検索結果を確認する" \
+  --slug search-results \
   --check PW:SMOKE:PLAYWRIGHT_CLI
 ```
 
@@ -279,7 +285,8 @@ npm run create:test-design -- \
 生成先は命名規則から自動決定され、Parent CaseごとにMarkdownを1ファイルだけ作る。
 同じParent Case IDの既存Docがある場合は、slugが異なっても生成を拒否する。生成後、
 `test-design` workflowがケース固有の本文を記入し、`npm run check`で構造と整合性を
-検証する。
+検証する。生成中に異常終了した場合は、次回実行がGit管理外の内部transactionから
+完成済み内容だけを原子的に公開する。利用者や管理者によるlock管理は不要である。
 
 Exploration modeはCheck modeごとに次の値だけを使用する。
 
@@ -345,7 +352,9 @@ Runと観測結果を探索サマリへ記録する。
 - 探索・healで生成した補助証跡は `.playwright/artifacts/<Run ID>/` へ保存する
   （Git管理外）。`exploration.md`を作成した場合もこのフォルダへ保存するが、作成は
   必須ではない。目的のない補助証跡や秘密情報を含む補助証跡は生成しない
-- Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。例外として、ヒール（6.1）の
+- 探索Run IDは `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の一意suffix>` 形式とし、
+  sessionにも同じRun IDを使用する。時刻だけに依存せず、同じCheckの再実行・並行探索で
+  Artifactフォルダとsessionが衝突しないようにする。例外として、ヒール（6.1）の
   証跡退避は複数Checkを一括で扱うため `YYYYMMDD-HHmm_heal` 形式
   （同名がある場合は連番を付す）を使う
 - DocのArtifacts欄にはRun IDと必要最小限の相対pathだけを記録する

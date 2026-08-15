@@ -3,34 +3,36 @@
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
+  fsyncSync,
+  linkSync,
   mkdirSync,
   openSync,
   readFileSync,
   readdirSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  EXECUTION_MODE_BY_CHECK_MODE,
   isConcreteNoneReason,
+  parseAreaRegistryContent,
   VALID_EXPLORATION_MODES_BY_CHECK_MODE,
 } from './test-design-contract.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_TEMPLATE_ROOT = join(ROOT, 'test-designs', 'templates');
+const DEFAULT_AREA_REGISTRY = join(ROOT, 'test-designs', 'areas.json');
 const PARENT_ID_PATTERN = /^(E2E|INT)-([A-Z]{2,6})-(\d{3})$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 const PLACEHOLDER_PATTERN = /{{[A-Z0-9_]+}}/g;
-// PIDを読み取れない破損ロックだけを、同期的な生成処理として十分長い時間後に回収する。
-const PARENT_LOCK_STALE_AFTER_MS = 60_000;
+const TRANSACTION_VERSION = 1;
 
 const MODE_CONFIG = new Map([
   ['PW', {
-    executionMode: 'PLAYWRIGHT',
     template: 'pw-check-template.md',
     explorationPurpose: [
       '- 到達経路と状態遷移',
@@ -40,7 +42,6 @@ const MODE_CONFIG = new Map([
     ].join('\n'),
   }],
   ['API', {
-    executionMode: 'API',
     template: 'api-check-template.md',
     explorationPurpose: [
       '- request、response、認証、永続状態、副作用の実挙動',
@@ -49,7 +50,6 @@ const MODE_CONFIG = new Map([
     ].join('\n'),
   }],
   ['CU', {
-    executionMode: 'COMPUTER_USE',
     template: 'cu-check-template.md',
     explorationPurpose: [
       '- 到達経路、画面状態、操作の完了条件',
@@ -57,7 +57,6 @@ const MODE_CONFIG = new Map([
     ].join('\n'),
   }],
   ['MN', {
-    executionMode: 'MANUAL',
     template: 'mn-check-template.md',
     explorationPurpose: [
       '- 到達経路と確認対象の特定',
@@ -68,9 +67,9 @@ const MODE_CONFIG = new Map([
 
 const USAGE = `使い方:
   npm run create:test-design -- \\
-    --parent-id E2E-AUTH-001 \\
-    --title "ログイン成功" \\
-    --slug login-success \\
+    --parent-id E2E-DEMO-002 \\
+    --title "検索結果を確認する" \\
+    --slug search-results \\
     --check PW:SMOKE:PLAYWRIGHT_CLI
 
 Check指定:
@@ -165,10 +164,20 @@ export function parseCliArguments(args) {
   return values;
 }
 
-function validateInput({ parentId, title, slug, checks }) {
+function loadRegisteredAreas(registryPath = DEFAULT_AREA_REGISTRY) {
+  return parseAreaRegistryContent(readFileSync(registryPath, 'utf8'));
+}
+
+function validateInput({ parentId, title, slug, checks }, registeredAreas) {
   const parentMatch = parentId?.match(PARENT_ID_PATTERN);
   if (!parentMatch) {
     throw new Error('Parent Case IDは<LEVEL>-<AREA>-<3桁SEQ>形式にしてください');
+  }
+  const areaCode = parentMatch[2];
+  if (!registeredAreas.has(areaCode)) {
+    throw new Error(
+      `Area「${areaCode}」はtest-designs/areas.jsonのAreaレジストリに登録されていません`,
+    );
   }
   assertSingleLine('title', title ?? '');
   if (!SLUG_PATTERN.test(slug ?? '')) {
@@ -177,7 +186,7 @@ function validateInput({ parentId, title, slug, checks }) {
   if (!Array.isArray(checks) || checks.length === 0) {
     throw new Error('--checkを1件以上指定してください');
   }
-  return { level: parentMatch[1], area: parentMatch[2].toLowerCase() };
+  return { level: parentMatch[1], area: areaCode.toLowerCase() };
 }
 
 function explorationValues(check, modeConfig) {
@@ -207,7 +216,8 @@ function codeOrProcedure(mode, area, parentId, sectionNumber) {
 }
 
 export function composeTestDesign(input, options = {}) {
-  const { level, area } = validateInput(input);
+  const registeredAreas = options.registeredAreas ?? loadRegisteredAreas(options.registryPath);
+  const { level, area } = validateInput(input, registeredAreas);
   const templateRoot = options.templateRoot ?? DEFAULT_TEMPLATE_ROOT;
   const baseTemplate = readFileSync(join(templateRoot, 'test-design-doc-template.md'), 'utf8');
   const counters = new Map();
@@ -243,7 +253,8 @@ export function composeTestDesign(input, options = {}) {
     const sectionNumber = `3.${index + 1}`;
     const code = codeOrProcedure(check.mode, area, input.parentId, sectionNumber);
     rows.push(
-      `| ${checkId} | ${modeConfig.executionMode} | \`${check.explorationMode}\` | ` +
+      `| ${checkId} | ${EXECUTION_MODE_BY_CHECK_MODE.get(check.mode)} | ` +
+      `\`${check.explorationMode}\` | ` +
       `${check.tier} | DRAFT | ${code} |`,
     );
 
@@ -275,7 +286,7 @@ export function composeTestDesign(input, options = {}) {
 }
 
 export function outputPathFor(input, root = ROOT) {
-  const { level, area } = validateInput(input);
+  const { level, area } = validateInput(input, loadRegisteredAreas());
   return join(
     root,
     'test-designs',
@@ -285,113 +296,185 @@ export function outputPathFor(input, root = ROOT) {
   );
 }
 
-function isProcessAlive(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) {
-    return false;
-  }
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error?.code !== 'ESRCH';
-  }
+function findExistingParentDoc(outputDirectory, parentId) {
+  const existingFile = readdirSync(outputDirectory)
+    .sort()
+    .find((name) => name.startsWith(`${parentId}-`) && name.endsWith('.md'));
+  return existingFile === undefined ? undefined : join(outputDirectory, existingFile);
 }
 
-function readLockSnapshot(lockPath) {
-  const stat = statSync(lockPath);
-  let owner;
-  try {
-    owner = JSON.parse(readFileSync(lockPath, 'utf8'));
-  } catch {
-    owner = undefined;
-  }
-  return { stat, owner };
+function existingParentError(parentId, existingPath) {
+  return new Error(
+    `Parent Case ID「${parentId}」は既存のDesign Docで使用されています: ${existingPath}`,
+  );
 }
 
-function removeStaleParentLock(lockPath) {
-  let snapshot;
-  try {
-    snapshot = readLockSnapshot(lockPath);
-  } catch (error) {
-    return error?.code === 'ENOENT';
-  }
-
-  const age = Date.now() - snapshot.stat.mtimeMs;
-  const hasOwnerPid = Number.isSafeInteger(snapshot.owner?.pid) && snapshot.owner.pid > 0;
-  const isStale = hasOwnerPid
-    ? !isProcessAlive(snapshot.owner.pid)
-    : age > PARENT_LOCK_STALE_AFTER_MS;
-  if (!isStale) {
-    return false;
-  }
-
-  try {
-    const current = statSync(lockPath);
-    if (
-      current.dev !== snapshot.stat.dev ||
-      current.ino !== snapshot.stat.ino ||
-      current.mtimeMs !== snapshot.stat.mtimeMs ||
-      current.size !== snapshot.stat.size
-    ) {
-      return false;
-    }
-    unlinkSync(lockPath);
-    return true;
-  } catch (error) {
-    return error?.code === 'ENOENT';
-  }
+function transactionDirectory(root) {
+  return join(root, '.playwright', 'test-design-transactions');
 }
 
-function acquireParentLock(lockPath, parentId) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const token = randomUUID();
-    let fileDescriptor;
-    try {
-      fileDescriptor = openSync(lockPath, 'wx');
-    } catch (error) {
-      if (error?.code === 'EEXIST' && attempt === 0 && removeStaleParentLock(lockPath)) {
-        continue;
-      }
-      if (error?.code === 'EEXIST') {
-        throw new Error(`Parent Case ID「${parentId}」の生成処理が進行中です`);
-      }
+function pendingTransactionPath(root, parentId) {
+  return join(transactionDirectory(root), `${parentId}.json`);
+}
+
+function unlinkIfExists(filePath) {
+  try {
+    unlinkSync(filePath);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
       throw error;
     }
-
-    try {
-      writeFileSync(fileDescriptor, JSON.stringify({
-        pid: process.pid,
-        token,
-        createdAt: new Date().toISOString(),
-      }));
-    } catch (error) {
-      try {
-        closeSync(fileDescriptor);
-      } finally {
-        unlinkSync(lockPath);
-      }
-      throw error;
-    }
-    return { fileDescriptor, token };
   }
-  throw new Error(`Parent Case ID「${parentId}」の生成ロックを取得できませんでした`);
 }
 
-function releaseParentLock(lockPath, lock) {
+function writeDurableStagingFile(filePath, content, mode = 0o600) {
+  const fileDescriptor = openSync(filePath, 'wx', mode);
+  let completed = false;
   try {
-    closeSync(lock.fileDescriptor);
+    writeFileSync(fileDescriptor, content, 'utf8');
+    fsyncSync(fileDescriptor);
+    completed = true;
   } finally {
-    let owner;
     try {
-      owner = JSON.parse(readFileSync(lockPath, 'utf8'));
+      closeSync(fileDescriptor);
+    } finally {
+      if (!completed) {
+        unlinkIfExists(filePath);
+      }
+    }
+  }
+}
+
+function validateTransaction(transaction, parentId, root) {
+  if (
+    transaction?.version !== TRANSACTION_VERSION ||
+    transaction.parentId !== parentId ||
+    typeof transaction.token !== 'string' ||
+    transaction.token === '' ||
+    typeof transaction.outputFile !== 'string' ||
+    typeof transaction.markdown !== 'string'
+  ) {
+    throw new Error(`Parent Case ID「${parentId}」の保留中生成記録が不正です`);
+  }
+
+  const parentMatch = parentId.match(PARENT_ID_PATTERN);
+  const outputFilePattern = new RegExp(
+    `^${parentId}-[a-z0-9]+(?:-[a-z0-9]+)*\\.md$`,
+  );
+  if (
+    parentMatch === null ||
+    basename(transaction.outputFile) !== transaction.outputFile ||
+    !outputFilePattern.test(transaction.outputFile)
+  ) {
+    throw new Error(`Parent Case ID「${parentId}」の保留中生成先が不正です`);
+  }
+
+  return {
+    ...transaction,
+    outputPath: join(
+      root,
+      'test-designs',
+      parentMatch[1].toLowerCase(),
+      parentMatch[2].toLowerCase(),
+      transaction.outputFile,
+    ),
+  };
+}
+
+function readPendingTransaction(root, parentId) {
+  const transactionPath = pendingTransactionPath(root, parentId);
+  let content;
+  try {
+    content = readFileSync(transactionPath, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return undefined;
+    }
+    throw error;
+  }
+
+  let transaction;
+  try {
+    transaction = JSON.parse(content);
+  } catch {
+    throw new Error(`Parent Case ID「${parentId}」の保留中生成記録が不正です`);
+  }
+  return validateTransaction(transaction, parentId, root);
+}
+
+function removePendingTransaction(root, transaction) {
+  const transactionPath = pendingTransactionPath(root, transaction.parentId);
+  let current;
+  try {
+    current = JSON.parse(readFileSync(transactionPath, 'utf8'));
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+  if (current?.token === transaction.token) {
+    unlinkIfExists(transactionPath);
+  }
+}
+
+function publishTransaction(root, transaction) {
+  const outputDirectory = dirname(transaction.outputPath);
+  mkdirSync(outputDirectory, { recursive: true });
+  const existingPath = findExistingParentDoc(outputDirectory, transaction.parentId);
+  if (existingPath !== undefined) {
+    removePendingTransaction(root, transaction);
+    if (
+      existingPath === transaction.outputPath &&
+      readFileSync(existingPath, 'utf8') === transaction.markdown
+    ) {
+      return existingPath;
+    }
+    throw existingParentError(transaction.parentId, existingPath);
+  }
+
+  const stagingDirectory = transactionDirectory(root);
+  mkdirSync(stagingDirectory, { recursive: true });
+  const stagedDocPath = join(stagingDirectory, `${transaction.token}.md.tmp`);
+  writeDurableStagingFile(stagedDocPath, transaction.markdown, 0o644);
+  try {
+    try {
+      // 完成済みinodeだけを最終pathへlinkし、空・途中書きのDocを公開しない。
+      linkSync(stagedDocPath, transaction.outputPath);
     } catch (error) {
-      if (error?.code !== 'ENOENT') {
+      if (
+        error?.code !== 'EEXIST' ||
+        readFileSync(transaction.outputPath, 'utf8') !== transaction.markdown
+      ) {
         throw error;
       }
     }
-    if (owner?.token === lock.token) {
-      unlinkSync(lockPath);
+  } finally {
+    unlinkIfExists(stagedDocPath);
+  }
+  removePendingTransaction(root, transaction);
+  return transaction.outputPath;
+}
+
+function createPendingTransaction(root, transaction) {
+  const directory = transactionDirectory(root);
+  mkdirSync(directory, { recursive: true });
+  const stagedTransactionPath = join(directory, `${transaction.token}.json.tmp`);
+  const transactionPath = pendingTransactionPath(root, transaction.parentId);
+  writeDurableStagingFile(stagedTransactionPath, JSON.stringify(transaction));
+  try {
+    try {
+      // hard linkの作成は既存pathを上書きせず原子的。完全な記録だけを公開する。
+      linkSync(stagedTransactionPath, transactionPath);
+      return true;
+    } catch (error) {
+      if (error?.code === 'EEXIST') {
+        return false;
+      }
+      throw error;
     }
+  } finally {
+    unlinkIfExists(stagedTransactionPath);
   }
 }
 
@@ -401,24 +484,32 @@ export function writeTestDesign(input, root = ROOT) {
   const markdown = composeTestDesign(input);
   mkdirSync(outputDirectory, { recursive: true });
 
-  const lockPath = join(outputDirectory, `.${input.parentId}.create.lock`);
-  const lock = acquireParentLock(lockPath, input.parentId);
-
-  try {
-    const existingFile = readdirSync(outputDirectory)
-      .sort()
-      .find((name) => name.startsWith(`${input.parentId}-`) && name.endsWith('.md'));
-    if (existingFile !== undefined) {
-      throw new Error(
-        `Parent Case ID「${input.parentId}」は既存のDesign Docで使用されています: ` +
-        join(outputDirectory, existingFile),
-      );
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const pending = readPendingTransaction(root, input.parentId);
+    if (pending !== undefined) {
+      const recoveredPath = publishTransaction(root, pending);
+      throw existingParentError(input.parentId, recoveredPath);
     }
-    writeFileSync(outputPath, markdown, { encoding: 'utf8', flag: 'wx' });
-    return outputPath;
-  } finally {
-    releaseParentLock(lockPath, lock);
+
+    const existingPath = findExistingParentDoc(outputDirectory, input.parentId);
+    if (existingPath !== undefined) {
+      throw existingParentError(input.parentId, existingPath);
+    }
+
+    const transaction = validateTransaction({
+      version: TRANSACTION_VERSION,
+      parentId: input.parentId,
+      outputFile: basename(outputPath),
+      markdown,
+      token: randomUUID(),
+      createdAt: new Date().toISOString(),
+    }, input.parentId, root);
+    if (!createPendingTransaction(root, transaction)) {
+      continue;
+    }
+    return publishTransaction(root, transaction);
   }
+  throw new Error(`Parent Case ID「${input.parentId}」の生成処理を完了できませんでした`);
 }
 
 function main() {

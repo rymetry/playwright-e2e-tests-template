@@ -5,8 +5,13 @@ import {
   findDuplicateParentCaseIds,
   findOrphanCheckSectionIds,
   parseDesignDocContent,
+  validateParentCaseArea,
   validateExplorationSummary,
 } from './check-consistency.mjs';
+import {
+  EXECUTION_MODE_BY_CHECK_MODE,
+  parseAreaRegistryContent,
+} from './test-design-contract.mjs';
 
 const FILE_PATH = '/tmp/E2E-TST-001-exploration-summary.md';
 const FIELD_NAMES = [
@@ -64,6 +69,7 @@ function buildSummaryRows(values, { omit = [], duplicate = [] } = {}) {
 function buildCheck({
   id,
   checkMode,
+  executionMode = EXECUTION_MODE_BY_CHECK_MODE.get(checkMode),
   explorationMode,
   status = 'DRAFT',
   purpose,
@@ -83,7 +89,7 @@ function buildCheck({
     : '';
 
   return {
-    row: `| ${id} | ${checkMode} | ${explorationMode} | REGRESSION | ${status} | 未実装 |`,
+    row: `| ${id} | ${executionMode} | ${explorationMode} | REGRESSION | ${status} | 未実装 |`,
     section: `### 3.1 ${id}: テスト対象\n\n#### 探索目的\n\n${resolvedPurpose}\n\n#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n${summaryBlock}${duplicateBlock}\n\n#### Test Status判定根拠\n\n| 項目 | 値 |\n|---|---|\n| 判定 | ${status} |`,
   };
 }
@@ -203,6 +209,16 @@ test('Check一覧と探索サマリのmode不一致を拒否する', () => {
   assert.match(validateExplorationSummary(check).join('\n'), /Exploration modeが不一致/);
 });
 
+test('Check modeとExecution modeの不一致を拒否する', () => {
+  const [check] = parseChecks([buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    executionMode: 'API',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  })]);
+  assert.match(validateExplorationSummary(check).join('\n'), /Execution modeが不一致/);
+});
+
 test('必須行の欠落と重複を拒否する', () => {
   const [check] = parseChecks([buildCheck({
     id: 'E2E-TST-001-PW-01',
@@ -253,6 +269,7 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     'TBD',
     '`TBD`',
     '**TBD**',
+    '<strong>TBD</strong>',
     '_未定_',
     '[TODO](https://example.test/todo)',
     '未記入',
@@ -314,6 +331,8 @@ test('EVALUATING以降の非NONEでは探索なしを示す値を拒否する', 
     '`なし`',
     '**TBD**',
     '**未実施**',
+    '<strong>未実施</strong>',
+    '<em>TODO</em>',
     '_なし_',
     '[TODO](https://example.test/todo)',
     'なし（探索不要）',
@@ -337,6 +356,39 @@ test('EVALUATING以降の非NONEでは探索なしを示す値を拒否する', 
       assert.match(problems, /探索サマリ「観測サマリ」が未完了です/);
     });
   }
+});
+
+test('EVALUATING以降では候補とArtifacts内のplaceholderを拒否する', () => {
+  const [check] = parseChecks([buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+    status: 'ACTIVE',
+    summary: {
+      '実装候補（レビュー対象）': '反映済み（TBD）',
+      Artifacts: '<strong>TODO</strong>',
+    },
+  })]);
+  const problems = validateExplorationSummary(check).join('\n');
+  assert.match(problems, /実装候補が「反映済み（反映先）」または「なし」ではありません/);
+  assert.match(problems, /探索サマリ「Artifacts」が未完了です/);
+});
+
+test('Areaレジストリを単一のJSON定義から読み取る', () => {
+  const registeredAreas = parseAreaRegistryContent(JSON.stringify({
+    DEMO: { name: 'サンプル' },
+    AUTH: { name: '認証' },
+  }));
+  assert.deepEqual(registeredAreas, new Set(['DEMO', 'AUTH']));
+  assert.deepEqual(validateParentCaseArea('E2E-DEMO-001', registeredAreas), []);
+  assert.match(
+    validateParentCaseArea('E2E-ORDER-001', registeredAreas).join('\n'),
+    /Area「ORDER」がAreaレジストリにありません/,
+  );
+  assert.throws(
+    () => parseAreaRegistryContent('{"invalid": {"name": "不正"}}'),
+    /2〜6文字の大文字英字/,
+  );
 });
 
 test('探索サマリの値にescaped pipeを含む有効なMarkdown表を受け入れる', () => {

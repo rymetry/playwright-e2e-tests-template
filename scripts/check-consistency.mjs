@@ -252,6 +252,20 @@ function extractSubsection(section, heading) {
 }
 
 function parseMarkdownTableRow(line) {
+  let indentWidth = 0;
+  for (const character of line) {
+    if (character === ' ') {
+      indentWidth += 1;
+    } else if (character === '\t') {
+      indentWidth += 4 - (indentWidth % 4);
+    } else {
+      break;
+    }
+  }
+  if (indentWidth >= 4) {
+    return undefined; // Markdown上はindented code blockとなる
+  }
+
   const trimmed = line.trim();
   if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
     return undefined;
@@ -280,7 +294,7 @@ function parseStrictMarkdownTable(content, expectedHeader) {
   const lines = content.split('\n');
   const headerIndex = lines.findIndex((line) => line.trim() !== '');
   if (headerIndex === -1) {
-    return { valid: false, dataLines: [] };
+    return { valid: false, rows: [] };
   }
   const delimiterIndex = headerIndex + 1;
   const header = parseMarkdownTableRow(lines[headerIndex] ?? '');
@@ -292,17 +306,21 @@ function parseStrictMarkdownTable(content, expectedHeader) {
     delimiter.every((cell) => /^:?-{3,}:?$/.test(cell));
 
   if (!valid) {
-    return { valid: false, dataLines: [] };
+    return { valid: false, rows: [] };
   }
 
-  const dataLines = [];
+  const rows = [];
   for (const line of lines.slice(delimiterIndex + 1)) {
-    if (parseMarkdownTableRow(line) === undefined) {
+    const cells = parseMarkdownTableRow(line);
+    if (cells === undefined) {
       break;
     }
-    dataLines.push(line);
+    if (cells.length !== expectedHeader.length) {
+      return { valid: false, rows: [] };
+    }
+    rows.push(cells);
   }
-  return { valid: true, dataLines };
+  return { valid: true, rows };
 }
 
 function parseExplorationSummary(section) {
@@ -315,11 +333,7 @@ function parseExplorationSummary(section) {
   if (body !== undefined) {
     const table = parseStrictMarkdownTable(body, ['項目', '値']);
     tableValid = table.valid;
-    for (const line of table.dataLines) {
-      const cells = parseMarkdownTableRow(line);
-      if (cells?.length !== 2) {
-        continue;
-      }
+    for (const cells of table.rows) {
       const [key, value] = cells;
       if (key === '項目' || /^-+$/.test(key)) {
         continue;
@@ -346,12 +360,7 @@ export function parseDesignDocContent(filePath, content) {
   const parentCaseId = parentMatch?.[1].trim();
 
   const checks = [];
-  for (const line of checkListTable.dataLines) {
-    const cells = parseMarkdownTableRow(line);
-    if (cells?.length !== 6) {
-      continue; // Check一覧は6列で固定
-    }
-
+  for (const cells of checkListTable.rows) {
     const id = cells[0] ?? '';
     if (!/^(E2E|INT)-/.test(id)) {
       continue; // 先頭セルがCheck IDで始まらない行（ヘッダ等）は対象外

@@ -134,14 +134,12 @@ function containsAsciiPlaceholder(value) {
   for (const match of value.matchAll(pattern)) {
     const markerStart = (match.index ?? 0) + match[1].length;
     const after = value.slice(markerStart + match[2].length).trimStart();
-    if (match[2] === 'TODO' && /^LIST(?:$|[^A-Z0-9_])/.test(after)) {
-      continue;
-    }
     if (
       match[2] === 'TBD' ||
       after === '' ||
       /^(?:です|でした|である|を|が|は|の(?:ため|まま)|[\s:：。、,，.!！?？(（【\[])/.test(after) ||
-      /^[A-Z]/i.test(after)
+      /^(?:\/|-\d)/.test(after) ||
+      /^(?:LATER|PENDING|PLACEHOLDER|AFTER|TO\s+BE)(?:$|[^A-Z0-9_])/i.test(after)
     ) {
       return true;
     }
@@ -155,7 +153,7 @@ function containsJapanesePlaceholder(value) {
     const after = value.slice(markerEnd).trimStart();
     if (
       after === '' ||
-      /^(?:です|でした|である|の(?:ため|まま|状態)|なので|[とに]なって|[\s:：。、,，.!！?？(（【\[])/.test(after)
+      /^(?:です|でした|である|の(?:ため|まま|状態)|なので|[とに]なって|[-/]|[\s:：。、,，.!！?？(（【\[])/.test(after)
     ) {
       return true;
     }

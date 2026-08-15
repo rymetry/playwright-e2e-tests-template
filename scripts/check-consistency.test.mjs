@@ -288,6 +288,10 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     'T<!-- -->BD',
     '探索理由はTBDです',
     'Run ID: run-TBD',
+    'Run ID: TODO-001',
+    'TODO/screenshot.png',
+    'Run ID: 未定-001',
+    '未定/screenshot.png',
     'Run IDは未定の状態です',
     '完了条件は未定となっている',
     '未定です',
@@ -417,6 +421,10 @@ test('部分装飾とHTML entityのplaceholderを表示値として拒否する'
     'artifacts/TBD/result.png',
     'Run ID: run-TBD',
     'Run ID: TBD-001',
+    'Run ID: TODO-001',
+    'TODO/screenshot.png',
+    'Run ID: 未定-001',
+    '未定/screenshot.png',
     'Run ID: TBD',
     '観測結果 TBD later',
     '観測結果は未定です',
@@ -461,7 +469,7 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
     status: 'ACTIVE',
     summary: {
       'Run / 観測環境': '未実施のジョブ件数は0だった / run-001 / 2026-08-15T10:00:00+09:00',
-      観測サマリ: 'TODO List screen is visible。未定義値はnullとして返り、TODO リスト画面も正常に表示された',
+      観測サマリ: 'Todo item was created。Todo API returned the reviewed response。TODO List screen is visible。未定義値はnullとして返り、TODO リスト画面も正常に表示された',
       '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
       Artifacts: 'run-001/artifacts/todo-list/result.png',
     },
@@ -502,6 +510,20 @@ test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け�
       ),
     },
     {
+      name: '4スペースindentされたcode block',
+      content: validContent.replace(
+        `| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${config.row}`,
+        `    | Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n    |---|---|---|---|---|---|\n    ${config.row}`,
+      ),
+    },
+    {
+      name: '正常行に7列のdata rowが混在',
+      content: validContent.replace(
+        config.row,
+        `${config.row}\n| E2E-TST-001-API-01 | API | API_INTEGRATION | REGRESSION | DRAFT | 未実装 | extra |`,
+      ),
+    },
+    {
       name: '7列',
       content: validContent
         .replace(
@@ -520,6 +542,22 @@ test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け�
       assert.deepEqual(findOrphanCheckSectionIds(doc), ['E2E-TST-001-PW-01']);
     });
   }
+});
+
+test('3スペースまでindentされたCheck一覧を受け入れる', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const content = buildDoc([config]).replace(
+    `| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${config.row}`,
+    `   | Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n   |---|---|---|---|---|---|\n   ${config.row}`,
+  );
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.equal(doc.checks.length, 1);
+  assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
 });
 
 test('Check一覧のCode列にescaped pipeを含む有効な6列表を受け入れる', () => {
@@ -568,6 +606,20 @@ test('探索サマリは正規のheaderとdelimiterを持つ2列表だけを受�
       section: config.section.replace(
         '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
         '#### 探索サマリ\n\n| 項目 | 値 | Extra |\n|---|---|---|\n',
+      ),
+    },
+    {
+      name: '4スペースindentされたcode block',
+      section: config.section.replace(
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
+        '#### 探索サマリ\n\n    | 項目 | 値 |\n    |---|---|\n',
+      ),
+    },
+    {
+      name: '正常行に3列のdata rowが混在',
+      section: config.section.replace(
+        '\n\n#### Test Status判定根拠',
+        '\n| Artifacts | duplicate | extra |\n\n#### Test Status判定根拠',
       ),
     },
     {

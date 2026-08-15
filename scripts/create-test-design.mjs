@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
+  existsSync,
   fsyncSync,
   linkSync,
   mkdirSync,
@@ -345,14 +346,41 @@ function writeDurableStagingFile(filePath, content, mode = 0o600) {
   }
 }
 
+function hashMarkdown(markdown) {
+  return createHash('sha256').update(markdown, 'utf8').digest('hex');
+}
+
+function cleanupTransactionTemporaryFiles(root, parentId) {
+  const directory = transactionDirectory(root);
+  let names;
+  try {
+    names = readdirSync(directory);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  const prefix = `${parentId}.`;
+  for (const name of names) {
+    if (name.startsWith(prefix) && name.endsWith('.tmp')) {
+      unlinkIfExists(join(directory, name));
+    }
+  }
+}
+
 function validateTransaction(transaction, parentId, root) {
   if (
     transaction?.version !== TRANSACTION_VERSION ||
     transaction.parentId !== parentId ||
     typeof transaction.token !== 'string' ||
-    transaction.token === '' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(transaction.token) ||
     typeof transaction.outputFile !== 'string' ||
-    typeof transaction.markdown !== 'string'
+    typeof transaction.markdown !== 'string' ||
+    transaction.markdown.trim() === '' ||
+    typeof transaction.markdownHash !== 'string' ||
+    transaction.markdownHash !== hashMarkdown(transaction.markdown)
   ) {
     throw new Error(`Parent Case ID「${parentId}」の保留中生成記録が不正です`);
   }
@@ -364,9 +392,11 @@ function validateTransaction(transaction, parentId, root) {
   if (
     parentMatch === null ||
     basename(transaction.outputFile) !== transaction.outputFile ||
-    !outputFilePattern.test(transaction.outputFile)
+    !outputFilePattern.test(transaction.outputFile) ||
+    !new RegExp(`^# ${parentId} `, 'm').test(transaction.markdown) ||
+    !transaction.markdown.includes(`| Parent Case ID | ${parentId} |`)
   ) {
-    throw new Error(`Parent Case ID「${parentId}」の保留中生成先が不正です`);
+    throw new Error(`Parent Case ID「${parentId}」の保留中生成記録が不正です`);
   }
 
   return {
@@ -423,11 +453,12 @@ function publishTransaction(root, transaction) {
   mkdirSync(outputDirectory, { recursive: true });
   const existingPath = findExistingParentDoc(outputDirectory, transaction.parentId);
   if (existingPath !== undefined) {
-    removePendingTransaction(root, transaction);
     if (
       existingPath === transaction.outputPath &&
       readFileSync(existingPath, 'utf8') === transaction.markdown
     ) {
+      removePendingTransaction(root, transaction);
+      cleanupTransactionTemporaryFiles(root, transaction.parentId);
       return existingPath;
     }
     throw existingParentError(transaction.parentId, existingPath);
@@ -435,7 +466,10 @@ function publishTransaction(root, transaction) {
 
   const stagingDirectory = transactionDirectory(root);
   mkdirSync(stagingDirectory, { recursive: true });
-  const stagedDocPath = join(stagingDirectory, `${transaction.token}.md.tmp`);
+  const stagedDocPath = join(
+    stagingDirectory,
+    `${transaction.parentId}.${transaction.token}.${randomUUID()}.md.tmp`,
+  );
   writeDurableStagingFile(stagedDocPath, transaction.markdown, 0o644);
   try {
     try {
@@ -443,7 +477,8 @@ function publishTransaction(root, transaction) {
       linkSync(stagedDocPath, transaction.outputPath);
     } catch (error) {
       if (
-        error?.code !== 'EEXIST' ||
+        !['EEXIST', 'ENOENT'].includes(error?.code) ||
+        !existsSync(transaction.outputPath) ||
         readFileSync(transaction.outputPath, 'utf8') !== transaction.markdown
       ) {
         throw error;
@@ -453,13 +488,17 @@ function publishTransaction(root, transaction) {
     unlinkIfExists(stagedDocPath);
   }
   removePendingTransaction(root, transaction);
+  cleanupTransactionTemporaryFiles(root, transaction.parentId);
   return transaction.outputPath;
 }
 
 function createPendingTransaction(root, transaction) {
   const directory = transactionDirectory(root);
   mkdirSync(directory, { recursive: true });
-  const stagedTransactionPath = join(directory, `${transaction.token}.json.tmp`);
+  const stagedTransactionPath = join(
+    directory,
+    `${transaction.parentId}.${transaction.token}.json.tmp`,
+  );
   const transactionPath = pendingTransactionPath(root, transaction.parentId);
   writeDurableStagingFile(stagedTransactionPath, JSON.stringify(transaction));
   try {
@@ -468,7 +507,7 @@ function createPendingTransaction(root, transaction) {
       linkSync(stagedTransactionPath, transactionPath);
       return true;
     } catch (error) {
-      if (error?.code === 'EEXIST') {
+      if (error?.code === 'EEXIST' || error?.code === 'ENOENT') {
         return false;
       }
       throw error;
@@ -501,6 +540,7 @@ export function writeTestDesign(input, root = ROOT) {
       parentId: input.parentId,
       outputFile: basename(outputPath),
       markdown,
+      markdownHash: hashMarkdown(markdown),
       token: randomUUID(),
       createdAt: new Date().toISOString(),
     }, input.parentId, root);

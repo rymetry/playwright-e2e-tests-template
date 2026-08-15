@@ -146,6 +146,38 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function blankExceptNewlines(value) {
+  return value.replace(/[^\n]/g, ' ');
+}
+
+function stripNonRenderedMarkdown(content) {
+  const withoutComments = content.replace(
+    /<!--[\s\S]*?-->/g,
+    (comment) => blankExceptNewlines(comment),
+  );
+  const lines = withoutComments.split('\n');
+  let activeFence;
+
+  return lines.map((line) => {
+    const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (activeFence === undefined) {
+      if (fence === null) {
+        return line;
+      }
+      activeFence = { character: fence[1][0], length: fence[1].length };
+      return '';
+    }
+
+    const closingPattern = new RegExp(
+      `^\\s{0,3}${escapeRegExp(activeFence.character)}{${activeFence.length},}\\s*$`,
+    );
+    if (closingPattern.test(line)) {
+      activeFence = undefined;
+    }
+    return '';
+  }).join('\n');
+}
+
 function extractCheckSections(content, checkId) {
   const lines = content.split('\n');
   const headingPattern = new RegExp(
@@ -253,9 +285,10 @@ function parseExplorationSummary(section) {
 }
 
 export function parseDesignDocContent(filePath, content) {
-  const lines = content.split('\n');
+  const renderedContent = stripNonRenderedMarkdown(content);
+  const lines = renderedContent.split('\n');
 
-  const parentMatch = content.match(/\|\s*Parent Case ID\s*\|\s*([^|]+)\|/);
+  const parentMatch = renderedContent.match(/\|\s*Parent Case ID\s*\|\s*([^|]+)\|/);
   const parentCaseId = parentMatch?.[1].trim();
 
   const checks = [];
@@ -271,7 +304,7 @@ export function parseDesignDocContent(filePath, content) {
       continue; // 先頭セルがCheck IDで始まらない行（ヘッダ等）は対象外
     }
 
-    const sections = extractCheckSections(content, id);
+    const sections = extractCheckSections(renderedContent, id);
     const section = sections[0];
     checks.push({
       id,
@@ -292,7 +325,7 @@ export function parseDesignDocContent(filePath, content) {
     file: filePath,
     parentCaseId,
     checks,
-    checkSectionIds: extractCheckSectionIds(content),
+    checkSectionIds: extractCheckSectionIds(renderedContent),
   };
 }
 

@@ -272,6 +272,10 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     '<strong>TBD</strong>',
     '_未定_',
     '[TODO](https://example.test/todo)',
+    '未**定**',
+    '**T**B**D**',
+    '[T](https://example.test/t)[B](https://example.test/b)[D](https://example.test/d)',
+    '&#84;&#66;&#68;',
     '未記入',
     '未定',
     'なし',
@@ -374,6 +378,49 @@ test('EVALUATING以降では候補とArtifacts内のplaceholderを拒否する',
   assert.match(problems, /探索サマリ「Artifacts」が未完了です/);
 });
 
+test('部分装飾とHTML entityのplaceholderを表示値として拒否する', async (t) => {
+  for (const value of [
+    '未**定**',
+    '**T**B**D**',
+    '[T](https://example.test/t)[B](https://example.test/b)[D](https://example.test/d)',
+    '&#84;&#66;&#68;',
+  ]) {
+    await t.test(value, () => {
+      const [check] = parseChecks([buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+        status: 'ACTIVE',
+        summary: {
+          'Run / 観測環境': value,
+          観測サマリ: value,
+          '実装候補（レビュー対象）': `反映済み（${value}）`,
+          Artifacts: value,
+        },
+      })]);
+      const problems = validateExplorationSummary(check).join('\n');
+      assert.match(problems, /探索サマリ「Run \/ 観測環境」が未完了です/);
+      assert.match(problems, /探索サマリ「観測サマリ」が未完了です/);
+      assert.match(problems, /実装候補が「反映済み（反映先）」または「なし」ではありません/);
+      assert.match(problems, /探索サマリ「Artifacts」が未完了です/);
+    });
+  }
+});
+
+test('placeholderを部分文字列に持つ正当な観測内容とArtifact pathを受け入れる', () => {
+  assertValid({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+    status: 'ACTIVE',
+    summary: {
+      観測サマリ: '未定義値はnullとして返り、todo-list画面は正常に表示された',
+      '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
+      Artifacts: 'run-001/artifacts/todo-list/result.png',
+    },
+  });
+});
+
 test('Areaレジストリを単一のJSON定義から読み取る', () => {
   const registeredAreas = parseAreaRegistryContent(JSON.stringify({
     DEMO: { name: 'サンプル' },
@@ -474,6 +521,26 @@ test('Check一覧にない孤立したCheck詳細節を検出する', () => {
 
   assert.deepEqual(doc.checks.map((check) => check.id), ['E2E-TST-001-PW-01']);
   assert.deepEqual(findOrphanCheckSectionIds(doc), ['E2E-TST-001-API-01']);
+});
+
+test('code fenceとHTMLコメント内のCheck構造を解析対象にしない', () => {
+  const real = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  real.section += `\n\n\`\`\`md\n#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n| Artifacts | TODO |\n\`\`\``;
+  const decoy = buildCheck({
+    id: 'E2E-TST-001-API-01',
+    checkMode: 'API',
+    explorationMode: 'API_INTEGRATION',
+  });
+  const content = `${buildDoc([real])}\n\n\`\`\`md\n${decoy.row}\n${decoy.section}\n\`\`\`\n\n<!--\n${decoy.row}\n${decoy.section}\n-->`;
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.deepEqual(doc.checks.map((check) => check.id), ['E2E-TST-001-PW-01']);
+  assert.deepEqual(doc.checkSectionIds, ['E2E-TST-001-PW-01']);
+  assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
 });
 
 test('Parent Case IDが異なるslugのDocで重複する場合を検出する', () => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   mkdirSync,
   mkdtempSync,
@@ -76,6 +77,10 @@ function pendingTransactionPath(root) {
   );
 }
 
+function markdownHash(markdown) {
+  return createHash('sha256').update(markdown, 'utf8').digest('hex');
+}
+
 function writePendingTransaction(root, { slug, markdown, token = 'recovery-token' }) {
   const transactionPath = pendingTransactionPath(root);
   mkdirSync(dirname(transactionPath), { recursive: true });
@@ -84,6 +89,7 @@ function writePendingTransaction(root, { slug, markdown, token = 'recovery-token
     parentId: BASE_INPUT.parentId,
     outputFile: `${BASE_INPUT.parentId}-${slug}.md`,
     markdown,
+    markdownHash: markdownHash(markdown),
     token,
     createdAt: '2026-08-15T00:00:00.000Z',
   }));
@@ -342,10 +348,22 @@ test('異常終了後の保留中生成をPIDや期限に依存せず完了す�
     checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
   };
   const recoveredMarkdown = composeTestDesign(recoveredInput);
+  const token = 'recovery-token';
   const transactionPath = writePendingTransaction(root, {
     slug: recoveredInput.slug,
     markdown: recoveredMarkdown,
+    token,
   });
+  const transactionDir = dirname(transactionPath);
+  // stage完成後・final公開前、およびtransaction record公開前の異常終了を再現する。
+  writeFileSync(
+    join(transactionDir, `${BASE_INPUT.parentId}.${token}.previous-attempt.md.tmp`),
+    recoveredMarkdown,
+  );
+  writeFileSync(
+    join(transactionDir, `${BASE_INPUT.parentId}.orphan-token.json.tmp`),
+    '{"partial":',
+  );
 
   assert.throws(
     () => writeTestDesign({
@@ -361,6 +379,74 @@ test('異常終了後の保留中生成をPIDや期限に依存せず完了す�
   );
   assert.equal(readFileSync(recoveredPath, 'utf8'), recoveredMarkdown);
   assert.throws(() => readFileSync(transactionPath, 'utf8'), /ENOENT/);
+  assert.deepEqual(readdirSync(transactionDir), []);
+});
+
+test('破損したtransactionから空のDocを公開しない', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-corrupt-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const transactionPath = pendingTransactionPath(root);
+  mkdirSync(dirname(transactionPath), { recursive: true });
+  writeFileSync(transactionPath, JSON.stringify({
+    version: 1,
+    parentId: BASE_INPUT.parentId,
+    outputFile: `${BASE_INPUT.parentId}-corrupt.md`,
+    markdown: '',
+    markdownHash: markdownHash(''),
+    token: 'corrupt-token',
+    createdAt: '2026-08-15T00:00:00.000Z',
+  }));
+
+  assert.throws(
+    () => writeTestDesign({
+      ...BASE_INPUT,
+      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    }, root),
+    /保留中生成記録が不正です/,
+  );
+  assert.deepEqual(readdirSync(join(root, 'test-designs/e2e/demo')), []);
+  assert.equal(readFileSync(transactionPath, 'utf8').includes('corrupt-token'), true);
+});
+
+test('final公開後に異常終了したtransactionを完了扱いで回収する', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-linked-recovery-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const recoveredInput = {
+    ...BASE_INPUT,
+    slug: 'already-linked',
+    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+  };
+  const recoveredMarkdown = composeTestDesign(recoveredInput);
+  const token = 'already-linked-token';
+  const transactionPath = writePendingTransaction(root, {
+    slug: recoveredInput.slug,
+    markdown: recoveredMarkdown,
+    token,
+  });
+  const outputPath = join(
+    root,
+    'test-designs/e2e/demo/E2E-DEMO-002-already-linked.md',
+  );
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, recoveredMarkdown);
+  writeFileSync(
+    join(
+      dirname(transactionPath),
+      `${BASE_INPUT.parentId}.${token}.linked-before-cleanup.md.tmp`,
+    ),
+    recoveredMarkdown,
+  );
+
+  assert.throws(
+    () => writeTestDesign({
+      ...BASE_INPUT,
+      slug: 'new-request',
+      checks: [check('API:REGRESSION:API_INTEGRATION')],
+    }, root),
+    /E2E-DEMO-002-already-linked\.md/,
+  );
+  assert.equal(readFileSync(outputPath, 'utf8'), recoveredMarkdown);
+  assert.deepEqual(readdirSync(dirname(transactionPath)), []);
 });
 
 test('保留中生成を複数プロセスが同時回復してもDocは1件だけ公開する', async (t) => {

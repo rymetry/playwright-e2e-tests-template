@@ -21,33 +21,38 @@ const NONE_REASON_PLACEHOLDERS = new Set([
   'なし',
 ]);
 
-const MARKDOWN_WRAPPERS = [
-  /^(`+)([\s\S]*)\1$/,
-  /^\*\*([\s\S]*)\*\*$/,
-  /^__([\s\S]*)__$/,
-  /^~~([\s\S]*)~~$/,
-  /^\*([\s\S]*)\*$/,
-  /^_([\s\S]*)_$/,
-  /^\[([\s\S]*)\]\([^)]*\)$/,
-];
+const HTML_ENTITIES = new Map([
+  ['amp', '&'],
+  ['apos', "'"],
+  ['gt', '>'],
+  ['lt', '<'],
+  ['quot', '"'],
+]);
+
+function decodeHtmlEntities(value) {
+  return value.replace(/&(?:#(x[0-9a-f]+|\d+)|([a-z]+));/gi, (match, numeric, named) => {
+    if (numeric !== undefined) {
+      const radix = numeric[0].toLowerCase() === 'x' ? 16 : 10;
+      const digits = radix === 16 ? numeric.slice(1) : numeric;
+      const codePoint = Number.parseInt(digits, radix);
+      if (Number.isSafeInteger(codePoint) && codePoint <= 0x10ffff) {
+        return String.fromCodePoint(codePoint);
+      }
+      return match;
+    }
+    return HTML_ENTITIES.get(named.toLowerCase()) ?? match;
+  });
+}
 
 export function normalizeContractToken(value) {
-  let normalized = value?.trim() ?? '';
-  let changed = true;
-  while (changed && normalized !== '') {
-    changed = false;
-    for (const pattern of MARKDOWN_WRAPPERS) {
-      const match = normalized.match(pattern);
-      if (match === null) {
-        continue;
-      }
-      normalized = (match[2] ?? match[1] ?? '').trim();
-      changed = true;
-      break;
-    }
-  }
-  // Markdown内で有効なinline HTMLも、装飾の有無で契約値が変わらないよう除去する。
-  normalized = normalized.replace(/<\/?[A-Za-z][^>]*>/g, '').trim();
+  let normalized = decodeHtmlEntities(value?.trim() ?? '');
+  // 表示上の文字列を契約値として扱い、部分的なMarkdown装飾やlinkも除去する。
+  normalized = normalized
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<\/?[A-Za-z][^>]*>/g, '')
+    .replace(/[`*_~]/g, '')
+    .trim();
   return normalized.replace(/\s+/g, ' ').toUpperCase();
 }
 
@@ -56,8 +61,8 @@ export function containsContractPlaceholder(value) {
   return (
     normalized === '' ||
     NONE_REASON_PLACEHOLDERS.has(normalized) ||
-    /(?:^|\b)(?:TBD|TODO)(?:\b|$)/.test(normalized) ||
-    /未実施|未記入|未定/.test(normalized)
+    /^(?:TBD|TODO)(?:\s*[:：].*)?$/.test(normalized) ||
+    /^(?:未実施|未記入|未定)(?:\s*[（(：:].*)?$/.test(normalized)
   );
 }
 

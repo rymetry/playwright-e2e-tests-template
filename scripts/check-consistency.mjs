@@ -126,10 +126,10 @@ function rel(filePath) {
 
 /**
  * 1つのDesign Docから次を抽出する。
- * - Parent Case ID: メタデータ表の「| Parent Case ID | ... |」行
- * - Check一覧の各行: 先頭セルがCheck ID形式の6列表行
+ * - Parent Case ID: メタデータ表の「Parent Case ID」行
+ * - Check一覧の各行: 6列表のデータ行
  *   （列順はテンプレート固定: ID / Execution mode / Exploration mode / Tier / Status / Code）
- * - 各Checkの判定: 「### ... <Check ID>: ...」見出しの節にある「| 判定 | ... |」行
+ * - 各Checkの判定: 「### ... <Check ID>: ...」見出しの節にあるStatus判定表
  */
 function parseDesignDoc(filePath) {
   const content = readFileSync(filePath, 'utf8');
@@ -178,10 +178,10 @@ function stripNonRenderedMarkdown(content) {
   }).join('\n');
 }
 
-function extractCheckList(content) {
+function extractH2Section(content, headingPattern) {
   const lines = content.split('\n');
   const headingIndex = lines.findIndex(
-    (line) => /^##\s+(?:\d+\.\s*)?Check一覧\s*$/.test(line),
+    (line) => headingPattern.test(line),
   );
   if (headingIndex === -1) {
     return '';
@@ -195,6 +195,14 @@ function extractCheckList(content) {
     }
   }
   return lines.slice(headingIndex + 1, endIndex).join('\n');
+}
+
+function extractCheckList(content) {
+  return extractH2Section(content, /^##\s+(?:\d+\.\s*)?Check一覧\s*$/);
+}
+
+function extractMetadata(content) {
+  return extractH2Section(content, /^##\s+(?:\d+\.\s*)?メタデータ\s*$/);
 }
 
 function extractCheckSections(content, checkId) {
@@ -280,8 +288,12 @@ function parseMarkdownTableRow(line) {
       delimiters.push(index);
     }
   }
-  if (delimiters.length === 0) {
+  if (trimmed === '') {
     return undefined;
+  }
+  if (delimiters.length === 0) {
+    // GFMではtable直後の空行まで、pipeのない行も不足セルを持つdata rowとなる。
+    return [trimmed];
   }
 
   const cells = [];
@@ -346,9 +358,6 @@ function parseExplorationSummary(section) {
     tableValid = table.valid;
     for (const cells of table.rows) {
       const [key, value] = cells;
-      if (key === '項目' || /^-+$/.test(key)) {
-        continue;
-      }
       if (!EXPLORATION_SUMMARY_FIELDS.includes(key)) {
         unknownFields.add(key);
         continue;
@@ -371,8 +380,13 @@ export function parseDesignDocContent(filePath, content) {
     ['Check ID', 'Execution mode', 'Exploration mode', 'Tier', 'Status', 'Code / 手順'],
   );
 
-  const parentMatch = renderedContent.match(/\|\s*Parent Case ID\s*\|\s*([^|]+)\|/);
-  const parentCaseId = parentMatch?.[1].trim();
+  const metadataTable = parseStrictMarkdownTable(
+    extractMetadata(renderedContent),
+    ['項目', '値'],
+  );
+  const parentCaseId = metadataTable.valid
+    ? metadataTable.rows.find(([key]) => key === 'Parent Case ID')?.[1].trim()
+    : undefined;
 
   const checks = [];
   for (const cells of checkListTable.rows) {
@@ -440,21 +454,21 @@ export function validateParentCaseArea(parentCaseId, registeredAreas) {
 
 /**
  * 「### 3.x <Check ID>: ...」見出しから次の同レベル見出しまでを切り出し、
- * その範囲内の「| 判定 | XXX |」行から判定値を取り出す。
+ * その範囲内の「Test Status判定根拠」表から判定値を取り出す。
  * 見出しまたは判定行が見つからない場合はundefinedを返す。
  */
 function extractJudgement(section) {
   if (section === undefined) {
     return undefined;
   }
-
-  for (const line of section.split('\n')) {
-    const judgementMatch = line.match(/^\|\s*判定\s*\|\s*([^|]+)\|/);
-    if (judgementMatch) {
-      return judgementMatch[1].trim();
-    }
+  const body = extractSubsection(section, 'Test Status判定根拠');
+  if (body === undefined) {
+    return undefined;
   }
-  return undefined;
+  const table = parseStrictMarkdownTable(body, ['項目', '値']);
+  return table.valid
+    ? table.rows.find(([key]) => key === '判定')?.[1].trim()
+    : undefined;
 }
 
 export function validateExplorationSummary(check) {

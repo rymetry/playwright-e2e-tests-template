@@ -95,7 +95,7 @@ function buildCheck({
 }
 
 function buildDoc(checks) {
-  return `# Test Design Doc\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |\n\n## 2. Check一覧\n\n| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${checks.map((check) => check.row).join('\n')}\n\n## 3. Check詳細\n\n${checks.map((check) => check.section).join('\n\n')}`;
+  return `# Test Design Doc\n\n## メタデータ\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |\n\n## 2. Check一覧\n\n| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${checks.map((check) => check.row).join('\n')}\n\n## 3. Check詳細\n\n${checks.map((check) => check.section).join('\n\n')}`;
 }
 
 function parseChecks(checks) {
@@ -544,6 +544,13 @@ test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け�
       ),
     },
     {
+      name: '正常行に1列のdata rowが混在',
+      content: validContent.replace(
+        config.row,
+        `${config.row}\ninvalid-check-id`,
+      ),
+    },
+    {
       name: '7列',
       content: validContent
         .replace(
@@ -601,6 +608,27 @@ test('外側pipeを省略したGFMのCheck一覧を受け入れる', () => {
   ));
 
   assert.equal(doc.checks.length, 1);
+  assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
+});
+
+test('外側pipeを省略したメタデータ表とStatus判定表を受け入れる', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  config.section = config.section.replace(
+    '#### Test Status判定根拠\n\n| 項目 | 値 |\n|---|---|\n| 判定 | DRAFT |',
+    '#### Test Status判定根拠\n\n項目 | 値\n---|---\n判定 | DRAFT',
+  );
+  const content = buildDoc([config]).replace(
+    '| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |',
+    '項目 | 値\n---|---\nParent Case ID | E2E-TST-001',
+  );
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.equal(doc.parentCaseId, 'E2E-TST-001');
+  assert.equal(doc.checks[0]?.judgement, 'DRAFT');
   assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
 });
 
@@ -685,25 +713,27 @@ test('探索サマリは正規のheaderとdelimiterを持つ2列表だけを受�
       ),
     },
     {
+      name: '正常行に1列のdata rowが混在',
+      section: config.section.replace(
+        '\n\n#### Test Status判定根拠',
+        '\n補足\n\n#### Test Status判定根拠',
+      ),
+    },
+    {
       name: 'delimiterとデータ行の間に説明文',
       section: config.section.replace(
         '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
         '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\nこれは表の外にある説明です。\n',
       ),
-      missingRows: true,
     },
   ];
 
-  for (const { name, section, missingRows = false } of cases) {
+  for (const { name, section } of cases) {
     await t.test(name, () => {
       const malformed = { ...config, section };
       const [check] = parseDesignDocContent(FILE_PATH, buildDoc([malformed])).checks;
       const problems = validateExplorationSummary(check).join('\n');
-      if (missingRows) {
-        assert.match(problems, /探索サマリに「Exploration mode」行がありません/);
-      } else {
-        assert.match(problems, /探索サマリ表は「項目」「値」の2列とdelimiter行が必要です/);
-      }
+      assert.match(problems, /探索サマリ表は「項目」「値」の2列とdelimiter行が必要です/);
     });
   }
 });
@@ -769,19 +799,27 @@ test('外側pipeのない探索サマリ行も重複として拒否する', () =
   assert.match(validateExplorationSummary(check).join('\n'), /「Artifacts」行が重複しています/);
 });
 
-test('探索サマリの定義外行を拒否する', () => {
-  const config = buildCheck({
-    id: 'E2E-TST-001-PW-01',
-    checkMode: 'PW',
-    explorationMode: 'PLAYWRIGHT_CLI',
-  });
-  config.section = config.section.replace(
-    '\n\n#### Test Status判定根拠',
-    '\n補足 | 定義外の行\n\n#### Test Status判定根拠',
-  );
-  const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+test('探索サマリの定義外行と再掲headerを拒否する', async (t) => {
+  for (const [name, row, expected] of [
+    ['通常の定義外行', '補足 | 定義外の行', /定義外の「補足」行があります/],
+    ['再掲header', '| 項目 | 値 |', /定義外の「項目」行があります/],
+    ['再掲delimiter', '|---|---|', /定義外の「---」行があります/],
+  ]) {
+    await t.test(name, () => {
+      const config = buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+      });
+      config.section = config.section.replace(
+        '\n\n#### Test Status判定根拠',
+        `\n${row}\n\n#### Test Status判定根拠`,
+      );
+      const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
 
-  assert.match(validateExplorationSummary(check).join('\n'), /定義外の「補足」行があります/);
+      assert.match(validateExplorationSummary(check).join('\n'), expected);
+    });
+  }
 });
 
 test('複数Checkの探索サマリをそれぞれの節だけから読む', () => {

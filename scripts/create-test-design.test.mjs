@@ -150,6 +150,15 @@ test('NONEの理由欠落とmode別の不正なExploration modeを拒否する',
   );
 });
 
+test('NONEの理由に既知のplaceholderを使用できない', () => {
+  for (const reason of ['理由', 'TBD', 'TODO', '未記入', '未定', 'なし']) {
+    assert.throws(
+      () => check(`PW:SMOKE:NONE:${reason}`),
+      /具体的な探索不要理由が必要/,
+    );
+  }
+});
+
 test('構造を壊すtemplate token形式の入力を拒否する', () => {
   assert.throws(
     () => composeTestDesign({
@@ -165,7 +174,7 @@ test('構造を壊すtemplate token形式の入力を拒否する', () => {
   );
 });
 
-test('生成先をParent Caseから決定し、既存ファイルを上書きしない', (t) => {
+test('生成先をParent Caseから決定し、同じParent Case IDの再生成を拒否する', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'test-design-composer-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const input = {
@@ -180,5 +189,17 @@ test('生成先をParent Caseから決定し、既存ファイルを上書きし
   assert.equal(outputPathFor(input, root), expected);
   assert.equal(writeTestDesign(input, root), expected);
   assert.match(readFileSync(expected, 'utf8'), /E2E-AUTH-001-PW-01/);
-  assert.throws(() => writeTestDesign(input, root), /既存ファイルは上書きしません/);
+  assert.throws(
+    () => writeTestDesign(input, root),
+    /Parent Case ID「E2E-AUTH-001」は既存のDesign Docで使用されています/,
+  );
+  assert.throws(
+    () => writeTestDesign({
+      ...input,
+      title: '別のタイトル',
+      slug: 'different-slug',
+      checks: [check('API:REGRESSION:API_INTEGRATION')],
+    }, root),
+    /E2E-AUTH-001-login-success\.md/,
+  );
 });

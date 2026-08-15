@@ -4,10 +4,16 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import {
+  isConcreteNoneReason,
+  VALID_EXPLORATION_MODES_BY_CHECK_MODE,
+} from './test-design-contract.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_TEMPLATE_ROOT = join(ROOT, 'test-designs', 'templates');
@@ -20,7 +26,6 @@ const MODE_CONFIG = new Map([
   ['PW', {
     executionMode: 'PLAYWRIGHT',
     template: 'pw-check-template.md',
-    explorationModes: new Set(['NONE', 'PLAYWRIGHT_CLI']),
     explorationPurpose: [
       '- 到達経路と状態遷移',
       '- 安定Locator候補',
@@ -31,7 +36,6 @@ const MODE_CONFIG = new Map([
   ['API', {
     executionMode: 'API',
     template: 'api-check-template.md',
-    explorationModes: new Set(['NONE', 'API_INTEGRATION']),
     explorationPurpose: [
       '- request、response、認証、永続状態、副作用の実挙動',
       '- 外部サービス連携と観測可能な完了条件',
@@ -41,7 +45,6 @@ const MODE_CONFIG = new Map([
   ['CU', {
     executionMode: 'COMPUTER_USE',
     template: 'cu-check-template.md',
-    explorationModes: new Set(['NONE', 'COMPUTER_USE']),
     explorationPurpose: [
       '- 到達経路、画面状態、操作の完了条件',
       '- 人の判断が必要な箇所の特定',
@@ -50,7 +53,6 @@ const MODE_CONFIG = new Map([
   ['MN', {
     executionMode: 'MANUAL',
     template: 'mn-check-template.md',
-    explorationModes: new Set(['NONE', 'MANUAL']),
     explorationPurpose: [
       '- 到達経路と確認対象の特定',
       '- 判定基準の候補',
@@ -70,7 +72,7 @@ Check指定:
 
 同じMODEを複数指定するとCheck IDを01、02の順に採番します。
 生成先は test-designs/<level>/<area>/<Parent Case ID>-<slug>.md です。
-既存ファイルは上書きしません。`;
+同じParent Case IDの既存Docはslugが異なっても上書き・再生成しません。`;
 
 function replaceTokens(source, replacements) {
   let result = source;
@@ -100,12 +102,12 @@ export function parseCheckArgument(value) {
   if (!VALID_TIERS.has(tier)) {
     throw new Error(`Tier「${tier}」はSMOKE/REGRESSION/EXTENDEDのいずれかにしてください`);
   }
-  if (!modeConfig.explorationModes.has(explorationMode)) {
+  if (!VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(mode)?.has(explorationMode)) {
     throw new Error(
       `Exploration mode「${explorationMode}」はCheck mode=${mode}では使用できません`,
     );
   }
-  if (explorationMode === 'NONE' && noneReason === '') {
+  if (explorationMode === 'NONE' && !isConcreteNoneReason(noneReason)) {
     throw new Error(`Check mode=${mode}でNONEを使う場合は具体的な探索不要理由が必要です`);
   }
   if (explorationMode !== 'NONE' && noneReason !== '') {
@@ -211,10 +213,13 @@ export function composeTestDesign(input, options = {}) {
     if (modeConfig === undefined) {
       throw new Error(`未対応のCheck modeです: ${check.mode}`);
     }
-    if (!VALID_TIERS.has(check.tier) || !modeConfig.explorationModes.has(check.explorationMode)) {
+    if (
+      !VALID_TIERS.has(check.tier) ||
+      !VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(check.mode)?.has(check.explorationMode)
+    ) {
       throw new Error(`Check指定が不正です: ${JSON.stringify(check)}`);
     }
-    if (check.explorationMode === 'NONE' && !check.noneReason?.trim()) {
+    if (check.explorationMode === 'NONE' && !isConcreteNoneReason(check.noneReason)) {
       throw new Error(`Check mode=${check.mode}でNONEを使う場合は具体的な探索不要理由が必要です`);
     }
     if (check.explorationMode === 'NONE') {
@@ -276,11 +281,20 @@ export function outputPathFor(input, root = ROOT) {
 
 export function writeTestDesign(input, root = ROOT) {
   const outputPath = outputPathFor(input, root);
-  if (existsSync(outputPath)) {
-    throw new Error(`既存ファイルは上書きしません: ${outputPath}`);
+  const outputDirectory = dirname(outputPath);
+  const existingFile = existsSync(outputDirectory)
+    ? readdirSync(outputDirectory)
+      .sort()
+      .find((name) => name.startsWith(`${input.parentId}-`) && name.endsWith('.md'))
+    : undefined;
+  if (existingFile !== undefined) {
+    throw new Error(
+      `Parent Case ID「${input.parentId}」は既存のDesign Docで使用されています: ` +
+      join(outputDirectory, existingFile),
+    );
   }
   const markdown = composeTestDesign(input);
-  mkdirSync(dirname(outputPath), { recursive: true });
+  mkdirSync(outputDirectory, { recursive: true });
   writeFileSync(outputPath, markdown, { encoding: 'utf8', flag: 'wx' });
   return outputPath;
 }

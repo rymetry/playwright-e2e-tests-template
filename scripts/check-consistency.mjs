@@ -17,7 +17,7 @@
  *
  * チェックルール一覧:
  *   No.1 Parent Case ID・Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>[-<MODE>-<NN>]）に従っている
- *   No.2 Check IDが全Docを通して重複していない
+ *   No.2 Parent Case ID・Check IDが全Docを通して重複していない
  *   No.3 Check一覧のStatus・Tierが正しい値で、Docファイル名がParent Case IDで始まる
  *   No.4 Check一覧のStatusと、各Checkの「Test Status判定根拠」表の判定が一致する
  *   No.5 PW/API CheckはStatusに応じてspecが存在する（EVALUATING以上=必須、RETIRED=禁止）
@@ -36,6 +36,11 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  isConcreteNoneReason,
+  VALID_EXPLORATION_MODES_BY_CHECK_MODE,
+} from './test-design-contract.mjs';
+
 // このスクリプトはscripts/直下に置かれる前提。親ディレクトリ=リポジトリルート
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -53,12 +58,7 @@ const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 const STATUSES_REQUIRING_SPEC = new Set(['EVALUATING', 'ACTIVE', 'QUARANTINE']);
 // 自動実行されるExecution mode（specと突き合わせる対象）
 const AUTOMATED_MODES = new Set(['PW', 'API']);
-export const VALID_EXPLORATION_MODES_BY_CHECK_MODE = new Map([
-  ['PW', new Set(['NONE', 'PLAYWRIGHT_CLI'])],
-  ['API', new Set(['NONE', 'API_INTEGRATION'])],
-  ['CU', new Set(['NONE', 'COMPUTER_USE'])],
-  ['MN', new Set(['NONE', 'MANUAL'])],
-]);
+export { VALID_EXPLORATION_MODES_BY_CHECK_MODE };
 const EXPLORATION_SUMMARY_FIELDS = [
   'Exploration mode',
   'Run / 観測環境',
@@ -67,7 +67,16 @@ const EXPLORATION_SUMMARY_FIELDS = [
   '観測上の疑問・要判断',
   'Artifacts',
 ];
-const EXPLORATION_PLACEHOLDER = /未実施|未記入（探索後に本記入）/;
+const INCOMPLETE_EXPLORATION_VALUES = new Set([
+  '',
+  '未実施',
+  '未記入（探索後に本記入）',
+  'なし',
+  'なし（探索不要）',
+  'TBD',
+  'TODO',
+  '未定',
+]);
 const NONE_EXPLORATION_SUMMARY_VALUES = new Map([
   ['Run / 観測環境', 'なし（探索不要）'],
   ['観測サマリ', 'なし（探索不要）'],
@@ -128,23 +137,32 @@ function normalizeMarkdownCode(value) {
   return (match?.[1] ?? trimmed).trim();
 }
 
-function extractCheckSection(content, checkId) {
-  const lines = content.split('\n');
-  const headingIndex = lines.findIndex(
-    (line) => /^###\s/.test(line) && line.includes(checkId)
-  );
-  if (headingIndex === -1) {
-    return undefined;
-  }
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-  let endIndex = lines.length;
-  for (let i = headingIndex + 1; i < lines.length; i += 1) {
-    if (/^###\s/.test(lines[i] ?? '')) {
-      endIndex = i;
-      break;
+function extractCheckSections(content, checkId) {
+  const lines = content.split('\n');
+  const headingPattern = new RegExp(
+    `^###\\s+\\d+\\.\\d+\\s+${escapeRegExp(checkId)}\\s*:`,
+  );
+  const headingIndexes = [];
+  for (const [index, line] of lines.entries()) {
+    if (headingPattern.test(line)) {
+      headingIndexes.push(index);
     }
   }
-  return lines.slice(headingIndex, endIndex).join('\n');
+
+  return headingIndexes.map((headingIndex) => {
+    let endIndex = lines.length;
+    for (let i = headingIndex + 1; i < lines.length; i += 1) {
+      if (/^###\s/.test(lines[i] ?? '')) {
+        endIndex = i;
+        break;
+      }
+    }
+    return lines.slice(headingIndex, endIndex).join('\n');
+  });
 }
 
 function extractSubsection(section, heading) {
@@ -164,6 +182,31 @@ function extractSubsection(section, heading) {
   return lines.slice(headingIndex + 1, endIndex).join('\n');
 }
 
+function parseMarkdownTableRow(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
+    return undefined;
+  }
+
+  const cells = [];
+  let cellStart = 1;
+  for (let index = 1; index < trimmed.length - 1; index += 1) {
+    if (trimmed[index] !== '|') {
+      continue;
+    }
+    let precedingBackslashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && trimmed[cursor] === '\\'; cursor -= 1) {
+      precedingBackslashes += 1;
+    }
+    if (precedingBackslashes % 2 === 0) {
+      cells.push(trimmed.slice(cellStart, index).trim());
+      cellStart = index + 1;
+    }
+  }
+  cells.push(trimmed.slice(cellStart, -1).trim());
+  return cells;
+}
+
 function parseExplorationSummary(section) {
   const headingCount = [...section.matchAll(/^#### 探索サマリ\s*$/gm)].length;
   const body = extractSubsection(section, '探索サマリ');
@@ -172,12 +215,11 @@ function parseExplorationSummary(section) {
 
   if (body !== undefined) {
     for (const line of body.split('\n')) {
-      const match = line.match(/^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*$/);
-      if (!match) {
+      const cells = parseMarkdownTableRow(line);
+      if (cells?.length !== 2) {
         continue;
       }
-      const key = match[1].trim();
-      const value = match[2].trim();
+      const [key, value] = cells;
       if (key === '項目' || /^-+$/.test(key)) {
         continue;
       }
@@ -211,6 +253,8 @@ export function parseDesignDocContent(filePath, content) {
       continue; // 先頭セルがCheck IDで始まらない行（ヘッダ等）は対象外
     }
 
+    const sections = extractCheckSections(content, id);
+    const section = sections[0];
     checks.push({
       id,
       explorationMode: normalizeMarkdownCode(cells[3] ?? ''),
@@ -219,12 +263,34 @@ export function parseDesignDocContent(filePath, content) {
       // MODE部分（PW/API/CU/MN）。ID形式が不正な場合はundefined
       mode: id.match(CHECK_ID_PATTERN)?.[2],
       // このCheckの節にある「Test Status判定根拠」表の判定値
-      judgement: extractJudgement(content, id),
-      section: extractCheckSection(content, id),
+      judgement: extractJudgement(section),
+      section,
+      sectionCount: sections.length,
     });
   }
 
   return { file: filePath, parentCaseId, checks };
+}
+
+export function findDuplicateParentCaseIds(docs) {
+  const firstFileByParentId = new Map();
+  const duplicates = [];
+  for (const doc of docs) {
+    if (doc.parentCaseId === undefined) {
+      continue;
+    }
+    const firstFile = firstFileByParentId.get(doc.parentCaseId);
+    if (firstFile === undefined) {
+      firstFileByParentId.set(doc.parentCaseId, doc.file);
+      continue;
+    }
+    duplicates.push({
+      parentCaseId: doc.parentCaseId,
+      file: doc.file,
+      firstFile,
+    });
+  }
+  return duplicates;
 }
 
 /**
@@ -232,8 +298,7 @@ export function parseDesignDocContent(filePath, content) {
  * その範囲内の「| 判定 | XXX |」行から判定値を取り出す。
  * 見出しまたは判定行が見つからない場合はundefinedを返す。
  */
-function extractJudgement(content, checkId) {
-  const section = extractCheckSection(content, checkId);
+function extractJudgement(section) {
   if (section === undefined) {
     return undefined;
   }
@@ -249,8 +314,11 @@ function extractJudgement(content, checkId) {
 
 export function validateExplorationSummary(check) {
   const problems = [];
+  const sectionCount = check.sectionCount ?? (check.section === undefined ? 0 : 1);
+  if (sectionCount !== 1) {
+    problems.push(`のCheck節は1件必要です（現在: ${sectionCount}件）`);
+  }
   if (check.section === undefined) {
-    problems.push('のCheck節が見つかりません');
     return problems;
   }
 
@@ -299,20 +367,15 @@ export function validateExplorationSummary(check) {
     }
     const purpose = extractSubsection(check.section, '探索目的') ?? '';
     const reason = purpose.match(/対象外（([^）]+)）/s)?.[1].trim();
-    if (reason === undefined || reason === '' || reason === '理由') {
+    if (!isConcreteNoneReason(reason)) {
       problems.push('はExploration mode=NONEですが、「探索目的」に具体的な対象外理由がありません');
     }
   }
 
   if (check.explorationMode !== 'NONE' && check.status !== 'DRAFT') {
-    for (const field of [
-      'Run / 観測環境',
-      '観測サマリ',
-      '実装候補（レビュー対象）',
-      '観測上の疑問・要判断',
-    ]) {
-      const value = summary.fields.get(field) ?? '';
-      if (EXPLORATION_PLACEHOLDER.test(value)) {
+    for (const field of ['Run / 観測環境', '観測サマリ']) {
+      const value = normalizeMarkdownCode(summary.fields.get(field) ?? '').toUpperCase();
+      if (INCOMPLETE_EXPLORATION_VALUES.has(value)) {
         problems.push(`はStatus=${check.status}ですが、探索サマリ「${field}」が未完了です`);
       }
     }
@@ -383,6 +446,14 @@ function main() {
     ...listFiles(join(ROOT, 'test-designs', 'int'), '.md'),
   ];
   const docs = docFiles.map(parseDesignDoc);
+
+  for (const duplicate of findDuplicateParentCaseIds(docs)) {
+    report(
+      rel(duplicate.file),
+      `Parent Case ID「${duplicate.parentCaseId}」が複数のDocで定義されています` +
+      `（最初のDoc: ${rel(duplicate.firstFile)}）`,
+    );
+  }
 
   // Step 2: spec収集
   const specTitles = listFiles(join(ROOT, 'e2e'), '.spec.ts').flatMap(parseSpecTitles);

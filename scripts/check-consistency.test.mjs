@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  findDuplicateParentCaseIds,
   parseDesignDocContent,
   validateExplorationSummary,
 } from './check-consistency.mjs';
@@ -236,6 +237,32 @@ test('NONEの具体的理由がない場合を拒否する', () => {
   assert.match(validateExplorationSummary(check).join('\n'), /具体的な対象外理由がありません/);
 });
 
+test('NONEの具体的理由はMarkdown上の改行を含んでも受け入れる', () => {
+  assertValid({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'NONE',
+    purpose: '対象外（仕様と既存契約から期待結果を確定でき、\n追加の探索を要しないため）',
+  });
+});
+
+test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
+  for (const reason of ['理由', 'TBD', 'TODO', '未記入', '未定', 'なし']) {
+    await t.test(reason, () => {
+      const [check] = parseChecks([buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'NONE',
+        purpose: `対象外（${reason}）`,
+      })]);
+      assert.match(
+        validateExplorationSummary(check).join('\n'),
+        /具体的な対象外理由がありません/,
+      );
+    });
+  }
+});
+
 test('NONEの固定値と異なる探索サマリを拒否する', () => {
   const [check] = parseChecks([buildCheck({
     id: 'E2E-TST-001-PW-01',
@@ -270,6 +297,37 @@ test('EVALUATING以降のplaceholderと未解決疑問を拒否する', () => {
   assert.match(problems, /観測上の疑問・要判断が解消されていません/);
 });
 
+test('EVALUATING以降の非NONEでは探索なしを示す値を拒否する', async (t) => {
+  for (const value of ['なし', '`なし`', 'なし（探索不要）', 'TBD', 'TODO', '未定']) {
+    await t.test(value, () => {
+      const [check] = parseChecks([buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+        status: 'ACTIVE',
+        summary: {
+          'Run / 観測環境': value,
+          観測サマリ: value,
+        },
+      })]);
+      const problems = validateExplorationSummary(check).join('\n');
+      assert.match(problems, /探索サマリ「Run \/ 観測環境」が未完了です/);
+      assert.match(problems, /探索サマリ「観測サマリ」が未完了です/);
+    });
+  }
+});
+
+test('探索サマリの値にescaped pipeを含む有効なMarkdown表を受け入れる', () => {
+  assertValid({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+    summary: {
+      '実装候補（レビュー対象）': '`getByRole("button", { name: /Save\\|保存/ })`',
+    },
+  });
+});
+
 test('複数Checkの探索サマリをそれぞれの節だけから読む', () => {
   const checks = parseChecks([
     buildCheck({
@@ -287,4 +345,66 @@ test('複数Checkの探索サマリをそれぞれの節だけから読む', () 
   ]);
   assert.deepEqual(validateExplorationSummary(checks[0]), []);
   assert.match(validateExplorationSummary(checks[1]).join('\n'), /「Artifacts」行がありません/);
+});
+
+test('Check名に含まれる別のCheck IDを節見出しとして扱わない', () => {
+  const targetId = 'E2E-TST-001-PW-01';
+  const decoy = buildCheck({
+    id: 'E2E-TST-001-PW-02',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  decoy.section = decoy.section.replace(
+    ': テスト対象',
+    `: ${targetId}との連携を確認する`,
+  );
+  const target = buildCheck({
+    id: targetId,
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+    summaryOptions: { omit: ['Artifacts'] },
+  });
+  const checks = parseDesignDocContent(FILE_PATH, buildDoc([decoy, target])).checks;
+  const parsedTarget = checks.find((check) => check.id === targetId);
+  assert.ok(parsedTarget);
+  assert.match(
+    validateExplorationSummary(parsedTarget).join('\n'),
+    /「Artifacts」行がありません/,
+  );
+});
+
+test('同じCheck IDの詳細節が複数ある場合を拒否する', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const content = `${buildDoc([config])}\n\n${config.section}`;
+  const [check] = parseDesignDocContent(FILE_PATH, content).checks;
+  assert.match(validateExplorationSummary(check).join('\n'), /Check節は1件必要です（現在: 2件）/);
+});
+
+test('Parent Case IDが異なるslugのDocで重複する場合を検出する', () => {
+  const first = parseDesignDocContent(
+    '/tmp/E2E-TST-001-first.md',
+    buildDoc([buildCheck({
+      id: 'E2E-TST-001-PW-01',
+      checkMode: 'PW',
+      explorationMode: 'NONE',
+    })]),
+  );
+  const second = parseDesignDocContent(
+    '/tmp/E2E-TST-001-second.md',
+    buildDoc([buildCheck({
+      id: 'E2E-TST-001-API-01',
+      checkMode: 'API',
+      explorationMode: 'NONE',
+    })]),
+  );
+
+  assert.deepEqual(findDuplicateParentCaseIds([first, second]), [{
+    parentCaseId: 'E2E-TST-001',
+    file: second.file,
+    firstFile: first.file,
+  }]);
 });

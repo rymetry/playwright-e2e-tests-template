@@ -306,7 +306,7 @@ Exploration modeはCheck modeごとに次の値だけを使用する。
 | 項目 | 役割 |
 |---|---|
 | Exploration mode | Check一覧と同じmode |
-| Run / 観測環境 | Run ID、tool/version、browser/app/actor、session、観測日時 |
+| Run / 観測環境 | Run ID、tool/version、browser/app/actor、session、観測日時（下記のlabel形式） |
 | 観測サマリ | 経路、状態遷移、動的値、外部依存、失敗しやすい操作 |
 | 実装候補（レビュー対象） | Locator、完了条件、データ準備等の未確定候補 |
 | 観測上の疑問・要判断 | 意図確認や仕様判断が必要な内容 |
@@ -318,6 +318,14 @@ Exploration modeはCheck modeごとに次の値だけを使用する。
   `未記入（探索後に本記入）`、Artifactsは`なし`とする
 - 探索直後: 実装候補と疑問を記録できるが、正式な設計・期待値とは扱わない
 - レビュー準備完了: 実装候補は`反映済み（反映先）`または`なし`、疑問は`なし`とする
+
+完了した非`NONE`探索のRun / 観測環境は、次のlabelを`; `区切りで記録する。
+`Run ID`、`Tool / version`、`Browser / app`、`Actor`、`Session`、`Observed at`。
+browserやsessionを使用しないmodeでもlabelは省略せず、`対象外（理由）`と記録する。
+
+```text
+Run ID: 20260815-101530-123_E2E-DEMO-001-PW-01_a1b2c3d4; Tool / version: playwright-cli 0.1.17; Browser / app: Chromium / target app; Actor: AI; Session: explore-20260815-101530-123_e2e-demo-001-pw-01_a1b2c3d4; Observed at: 2026-08-15T10:15:30+09:00
+```
 
 探索後は、候補をCheck modeに応じてシナリオ、Assertion設計、テストデータ、Fixture、
 前処理、実行契約、操作手順、判定基準等へ反映する。反映しない候補は除去し、疑問を
@@ -352,7 +360,7 @@ Runと観測結果を探索サマリへ記録する。
 - 探索・healで生成した補助証跡は `.playwright/artifacts/<Run ID>/` へ保存する
   （Git管理外）。`exploration.md`を作成した場合もこのフォルダへ保存するが、作成は
   必須ではない。目的のない補助証跡や秘密情報を含む補助証跡は生成しない
-- 探索Run IDは `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の一意suffix>` 形式とし、
+- 探索Run IDは `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の英数字suffix>` 形式とし、
   sessionにも同じRun IDを使用する。時刻だけに依存せず、同じCheckの再実行・並行探索で
   Artifactフォルダとsessionが衝突しないようにする。例外として、ヒール（6.1）の
   証跡退避は複数Checkを一括で扱うため `YYYYMMDD-HHmm_heal` 形式

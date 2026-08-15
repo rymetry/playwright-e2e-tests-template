@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -23,6 +24,42 @@ const BASE_INPUT = {
 
 function check(value) {
   return parseCheckArgument(value);
+}
+
+function runWriterProcess(root, input, startAt) {
+  const moduleUrl = new URL('./create-test-design.mjs', import.meta.url).href;
+  const script = `
+    import { writeTestDesign } from ${JSON.stringify(moduleUrl)};
+    const [inputJson, root, startAt] = process.argv.slice(1);
+    const waitMs = Number(startAt) - Date.now();
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    try {
+      process.stdout.write(writeTestDesign(JSON.parse(inputJson), root));
+    } catch (error) {
+      process.stderr.write(error.message);
+      process.exitCode = 1;
+    }
+  `;
+
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      script,
+      JSON.stringify(input),
+      root,
+      String(startAt),
+    ]);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+  });
 }
 
 function assertGeneratedDocIsStructurallyValid(markdown, expectedChecks) {
@@ -151,7 +188,18 @@ test('NONEの理由欠落とmode別の不正なExploration modeを拒否する',
 });
 
 test('NONEの理由に既知のplaceholderを使用できない', () => {
-  for (const reason of ['理由', 'TBD', 'TODO', '未記入', '未定', 'なし']) {
+  for (const reason of [
+    '理由',
+    'TBD',
+    '`TBD`',
+    '**TBD**',
+    '_未定_',
+    '[TODO](https://example.test/todo)',
+    'TODO',
+    '未記入',
+    '未定',
+    'なし',
+  ]) {
     assert.throws(
       () => check(`PW:SMOKE:NONE:${reason}`),
       /具体的な探索不要理由が必要/,
@@ -202,4 +250,32 @@ test('生成先をParent Caseから決定し、同じParent Case IDの再生成�
     }, root),
     /E2E-AUTH-001-login-success\.md/,
   );
+  assert.equal(
+    readdirSync(dirname(expected)).some((name) => name.endsWith('.create.lock')),
+    false,
+  );
+});
+
+test('同じParent Case IDの並行生成は1件だけ成功する', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-concurrent-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const startAt = Date.now() + 750;
+  const results = await Promise.all([
+    runWriterProcess(root, {
+      ...BASE_INPUT,
+      slug: 'first',
+      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    }, startAt),
+    runWriterProcess(root, {
+      ...BASE_INPUT,
+      slug: 'second',
+      checks: [check('API:REGRESSION:API_INTEGRATION')],
+    }, startAt),
+  ]);
+
+  assert.deepEqual(results.map((result) => result.code).sort(), [0, 1]);
+  const outputDirectory = join(root, 'test-designs/e2e/auth');
+  const outputFiles = readdirSync(outputDirectory);
+  assert.equal(outputFiles.filter((name) => name.endsWith('.md')).length, 1);
+  assert.equal(outputFiles.some((name) => name.endsWith('.create.lock')), false);
 });

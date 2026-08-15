@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   findDuplicateParentCaseIds,
+  findOrphanCheckSectionIds,
   parseDesignDocContent,
   validateExplorationSummary,
 } from './check-consistency.mjs';
@@ -247,7 +248,17 @@ test('NONEの具体的理由はMarkdown上の改行を含んでも受け入れ�
 });
 
 test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
-  for (const reason of ['理由', 'TBD', 'TODO', '未記入', '未定', 'なし']) {
+  for (const reason of [
+    '理由',
+    'TBD',
+    '`TBD`',
+    '**TBD**',
+    '_未定_',
+    '[TODO](https://example.test/todo)',
+    '未記入',
+    '未定',
+    'なし',
+  ]) {
     await t.test(reason, () => {
       const [check] = parseChecks([buildCheck({
         id: 'E2E-TST-001-PW-01',
@@ -298,7 +309,18 @@ test('EVALUATING以降のplaceholderと未解決疑問を拒否する', () => {
 });
 
 test('EVALUATING以降の非NONEでは探索なしを示す値を拒否する', async (t) => {
-  for (const value of ['なし', '`なし`', 'なし（探索不要）', 'TBD', 'TODO', '未定']) {
+  for (const value of [
+    'なし',
+    '`なし`',
+    '**TBD**',
+    '**未実施**',
+    '_なし_',
+    '[TODO](https://example.test/todo)',
+    'なし（探索不要）',
+    'TBD',
+    'TODO',
+    '未定',
+  ]) {
     await t.test(value, () => {
       const [check] = parseChecks([buildCheck({
         id: 'E2E-TST-001-PW-01',
@@ -382,6 +404,24 @@ test('同じCheck IDの詳細節が複数ある場合を拒否する', () => {
   const content = `${buildDoc([config])}\n\n${config.section}`;
   const [check] = parseDesignDocContent(FILE_PATH, content).checks;
   assert.match(validateExplorationSummary(check).join('\n'), /Check節は1件必要です（現在: 2件）/);
+});
+
+test('Check一覧にない孤立したCheck詳細節を検出する', () => {
+  const pw = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const api = buildCheck({
+    id: 'E2E-TST-001-API-01',
+    checkMode: 'API',
+    explorationMode: 'API_INTEGRATION',
+  });
+  const content = buildDoc([pw, api]).replace(api.row, '');
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.deepEqual(doc.checks.map((check) => check.id), ['E2E-TST-001-PW-01']);
+  assert.deepEqual(findOrphanCheckSectionIds(doc), ['E2E-TST-001-API-01']);
 });
 
 test('Parent Case IDが異なるslugのDocで重複する場合を検出する', () => {

@@ -17,7 +17,7 @@
  *
  * チェックルール一覧:
  *   No.1 Parent Case ID・Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>[-<MODE>-<NN>]）に従っている
- *   No.2 Parent Case ID・Check IDが全Docを通して重複していない
+ *   No.2 Parent Case ID・Check IDが全Docを通して重複せず、Check一覧と詳細節が対応する
  *   No.3 Check一覧のStatus・Tierが正しい値で、Docファイル名がParent Case IDで始まる
  *   No.4 Check一覧のStatusと、各Checkの「Test Status判定根拠」表の判定が一致する
  *   No.5 PW/API CheckはStatusに応じてspecが存在する（EVALUATING以上=必須、RETIRED=禁止）
@@ -38,6 +38,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   isConcreteNoneReason,
+  normalizeContractToken,
   VALID_EXPLORATION_MODES_BY_CHECK_MODE,
 } from './test-design-contract.mjs';
 
@@ -165,6 +166,19 @@ function extractCheckSections(content, checkId) {
   });
 }
 
+function extractCheckSectionIds(content) {
+  const headingPattern =
+    /^###\s+\d+\.\d+\s+((?:E2E|INT)-[A-Z]{2,6}-\d{3}-(?:PW|API|CU|MN)-\d{2})\s*:/;
+  const ids = [];
+  for (const line of content.split('\n')) {
+    const match = line.match(headingPattern);
+    if (match !== null) {
+      ids.push(match[1]);
+    }
+  }
+  return ids;
+}
+
 function extractSubsection(section, heading) {
   const lines = section.split('\n');
   const headingIndex = lines.findIndex((line) => line.trim() === `#### ${heading}`);
@@ -269,7 +283,19 @@ export function parseDesignDocContent(filePath, content) {
     });
   }
 
-  return { file: filePath, parentCaseId, checks };
+  return {
+    file: filePath,
+    parentCaseId,
+    checks,
+    checkSectionIds: extractCheckSectionIds(content),
+  };
+}
+
+export function findOrphanCheckSectionIds(doc) {
+  const listedCheckIds = new Set(doc.checks.map((check) => check.id));
+  return [...new Set(
+    (doc.checkSectionIds ?? []).filter((checkId) => !listedCheckIds.has(checkId)),
+  )];
 }
 
 export function findDuplicateParentCaseIds(docs) {
@@ -374,7 +400,7 @@ export function validateExplorationSummary(check) {
 
   if (check.explorationMode !== 'NONE' && check.status !== 'DRAFT') {
     for (const field of ['Run / 観測環境', '観測サマリ']) {
-      const value = normalizeMarkdownCode(summary.fields.get(field) ?? '').toUpperCase();
+      const value = normalizeContractToken(summary.fields.get(field) ?? '');
       if (INCOMPLETE_EXPLORATION_VALUES.has(value)) {
         problems.push(`はStatus=${check.status}ですが、探索サマリ「${field}」が未完了です`);
       }
@@ -496,6 +522,10 @@ function main() {
 
     if (doc.checks.length === 0) {
       report(docPath, 'Check一覧からCheckを1件も読み取れませんでした');
+    }
+
+    for (const checkId of findOrphanCheckSectionIds(doc)) {
+      report(docPath, `Check節「${checkId}」がCheck一覧にありません`);
     }
 
     for (const check of doc.checks) {

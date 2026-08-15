@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import {
-  existsSync,
+  closeSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -282,21 +284,39 @@ export function outputPathFor(input, root = ROOT) {
 export function writeTestDesign(input, root = ROOT) {
   const outputPath = outputPathFor(input, root);
   const outputDirectory = dirname(outputPath);
-  const existingFile = existsSync(outputDirectory)
-    ? readdirSync(outputDirectory)
-      .sort()
-      .find((name) => name.startsWith(`${input.parentId}-`) && name.endsWith('.md'))
-    : undefined;
-  if (existingFile !== undefined) {
-    throw new Error(
-      `Parent Case ID「${input.parentId}」は既存のDesign Docで使用されています: ` +
-      join(outputDirectory, existingFile),
-    );
-  }
   const markdown = composeTestDesign(input);
   mkdirSync(outputDirectory, { recursive: true });
-  writeFileSync(outputPath, markdown, { encoding: 'utf8', flag: 'wx' });
-  return outputPath;
+
+  const lockPath = join(outputDirectory, `.${input.parentId}.create.lock`);
+  let lockFile;
+  try {
+    lockFile = openSync(lockPath, 'wx');
+  } catch (error) {
+    if (error?.code === 'EEXIST') {
+      throw new Error(`Parent Case ID「${input.parentId}」の生成処理が進行中です`);
+    }
+    throw error;
+  }
+
+  try {
+    const existingFile = readdirSync(outputDirectory)
+      .sort()
+      .find((name) => name.startsWith(`${input.parentId}-`) && name.endsWith('.md'));
+    if (existingFile !== undefined) {
+      throw new Error(
+        `Parent Case ID「${input.parentId}」は既存のDesign Docで使用されています: ` +
+        join(outputDirectory, existingFile),
+      );
+    }
+    writeFileSync(outputPath, markdown, { encoding: 'utf8', flag: 'wx' });
+    return outputPath;
+  } finally {
+    try {
+      closeSync(lockFile);
+    } finally {
+      unlinkSync(lockPath);
+    }
+  }
 }
 
 function main() {

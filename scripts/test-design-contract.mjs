@@ -14,10 +14,38 @@ const NONE_REASON_PLACEHOLDERS = new Set([
   'なし',
 ]);
 
+const MARKDOWN_WRAPPERS = [
+  /^(`+)([\s\S]*)\1$/,
+  /^\*\*([\s\S]*)\*\*$/,
+  /^__([\s\S]*)__$/,
+  /^~~([\s\S]*)~~$/,
+  /^\*([\s\S]*)\*$/,
+  /^_([\s\S]*)_$/,
+  /^\[([\s\S]*)\]\([^)]*\)$/,
+];
+
+export function normalizeContractToken(value) {
+  let normalized = value?.trim() ?? '';
+  let changed = true;
+  while (changed && normalized !== '') {
+    changed = false;
+    for (const pattern of MARKDOWN_WRAPPERS) {
+      const match = normalized.match(pattern);
+      if (match === null) {
+        continue;
+      }
+      normalized = (match[2] ?? match[1] ?? '').trim();
+      changed = true;
+      break;
+    }
+  }
+  return normalized.replace(/\s+/g, ' ').toUpperCase();
+}
+
 export function isConcreteNoneReason(value) {
-  const normalized = value?.trim() ?? '';
+  const normalized = normalizeContractToken(value);
   if (normalized === '') {
     return false;
   }
-  return !NONE_REASON_PLACEHOLDERS.has(normalized.replace(/\s+/g, ' ').toUpperCase());
+  return !NONE_REASON_PLACEHOLDERS.has(normalized);
 }

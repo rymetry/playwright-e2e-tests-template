@@ -276,14 +276,40 @@ function parseMarkdownTableRow(line) {
   return cells;
 }
 
+function parseStrictMarkdownTable(content, expectedHeader) {
+  const lines = content.split('\n');
+  const headerIndex = lines.findIndex((line) => line.trim() !== '');
+  if (headerIndex === -1) {
+    return { valid: false, dataLines: [] };
+  }
+  const delimiterIndex = lines.findIndex(
+    (line, index) => index > headerIndex && line.trim() !== '',
+  );
+  const header = parseMarkdownTableRow(lines[headerIndex] ?? '');
+  const delimiter = parseMarkdownTableRow(lines[delimiterIndex] ?? '');
+  const valid =
+    header?.length === expectedHeader.length &&
+    header.every((cell, index) => cell === expectedHeader[index]) &&
+    delimiter?.length === expectedHeader.length &&
+    delimiter.every((cell) => /^:?-{3,}:?$/.test(cell));
+
+  return {
+    valid,
+    dataLines: valid ? lines.slice(delimiterIndex + 1) : [],
+  };
+}
+
 function parseExplorationSummary(section) {
   const headingCount = [...section.matchAll(/^#### 探索サマリ\s*$/gm)].length;
   const body = extractSubsection(section, '探索サマリ');
   const fields = new Map();
   const duplicates = new Set();
+  let tableValid = false;
 
   if (body !== undefined) {
-    for (const line of body.split('\n')) {
+    const table = parseStrictMarkdownTable(body, ['項目', '値']);
+    tableValid = table.valid;
+    for (const line of table.dataLines) {
       const cells = parseMarkdownTableRow(line);
       if (cells?.length !== 2) {
         continue;
@@ -300,25 +326,27 @@ function parseExplorationSummary(section) {
     }
   }
 
-  return { headingCount, fields, duplicates };
+  return { headingCount, fields, duplicates, tableValid };
 }
 
 export function parseDesignDocContent(filePath, content) {
   const renderedContent = stripNonRenderedMarkdown(content);
-  const checkListLines = extractCheckList(renderedContent).split('\n');
+  const checkListTable = parseStrictMarkdownTable(
+    extractCheckList(renderedContent),
+    ['Check ID', 'Execution mode', 'Exploration mode', 'Tier', 'Status', 'Code / 手順'],
+  );
 
   const parentMatch = renderedContent.match(/\|\s*Parent Case ID\s*\|\s*([^|]+)\|/);
   const parentCaseId = parentMatch?.[1].trim();
 
   const checks = [];
-  for (const line of checkListLines) {
-    // 表行「| a | b | ... |」をセル配列へ分解（両端の空要素を除去）
-    const cells = line.split('|').map((cell) => cell.trim());
-    if (cells.length < 8) {
-      continue; // Check一覧は6列（分解すると8要素）。それ未満の表行は対象外
+  for (const line of checkListTable.dataLines) {
+    const cells = parseMarkdownTableRow(line);
+    if (cells?.length !== 6) {
+      continue; // Check一覧は6列で固定
     }
 
-    const id = cells[1] ?? '';
+    const id = cells[0] ?? '';
     if (!/^(E2E|INT)-/.test(id)) {
       continue; // 先頭セルがCheck IDで始まらない行（ヘッダ等）は対象外
     }
@@ -327,10 +355,10 @@ export function parseDesignDocContent(filePath, content) {
     const section = sections[0];
     checks.push({
       id,
-      executionMode: normalizeMarkdownCode(cells[2] ?? ''),
-      explorationMode: normalizeMarkdownCode(cells[3] ?? ''),
-      tier: cells[4] ?? '',
-      status: cells[5] ?? '',
+      executionMode: normalizeMarkdownCode(cells[1] ?? ''),
+      explorationMode: normalizeMarkdownCode(cells[2] ?? ''),
+      tier: cells[3] ?? '',
+      status: cells[4] ?? '',
       // MODE部分（PW/API/CU/MN）。ID形式が不正な場合はundefined
       mode: id.match(CHECK_ID_PATTERN)?.[2],
       // このCheckの節にある「Test Status判定根拠」表の判定値
@@ -426,6 +454,9 @@ export function validateExplorationSummary(check) {
   const summary = parseExplorationSummary(check.section);
   if (summary.headingCount !== 1) {
     problems.push(`の「探索サマリ」は1件必要です（現在: ${summary.headingCount}件）`);
+  }
+  if (!summary.tableValid) {
+    problems.push('の探索サマリ表は「項目」「値」の2列とdelimiter行が必要です');
   }
   for (const field of EXPLORATION_SUMMARY_FIELDS) {
     if (!summary.fields.has(field)) {

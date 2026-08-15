@@ -95,7 +95,7 @@ function buildCheck({
 }
 
 function buildDoc(checks) {
-  return `# Test Design Doc\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |\n\n## 2. Check一覧\n\n| Check ID | Execution mode | Exploration mode | Tier | Status | Code |\n|---|---|---|---|---|---|\n${checks.map((check) => check.row).join('\n')}\n\n## 3. Check詳細\n\n${checks.map((check) => check.section).join('\n\n')}`;
+  return `# Test Design Doc\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |\n\n## 2. Check一覧\n\n| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${checks.map((check) => check.row).join('\n')}\n\n## 3. Check詳細\n\n${checks.map((check) => check.section).join('\n\n')}`;
 }
 
 function parseChecks(checks) {
@@ -278,7 +278,13 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     '&#84;&#66;&#68;',
     '&nbsp;TBD&nbsp;',
     '[TBD](https://example.test/path_(v1))',
+    '[TBD][pending]',
+    '[TBD](https://example.test/path_(v1_(draft)))',
+    '&emsp;TBD&emsp;',
+    'T&#8203;BD',
+    '<span title="1 > 0">TBD</span>',
     'T<!-- -->BD',
+    '探索理由はTBDです',
     '未定です',
     'TODO later',
     'TODO（探索後に記入）',
@@ -394,7 +400,17 @@ test('部分装飾とHTML entityのplaceholderを表示値として拒否する'
     '&#84;&#66;&#68;',
     '&nbsp;TBD&nbsp;',
     '[TBD](https://example.test/path_(v1))',
+    '[TBD][pending]',
+    '[TBD](https://example.test/path_(v1_(draft)))',
+    '&emsp;TBD&emsp;',
+    'T&#8203;BD',
+    '<span title="1 > 0">TBD</span>',
     'T<!-- -->BD',
+    'Run ID: TBD',
+    '観測結果 TBD later',
+    '観測結果は未定です',
+    '反映先: TODO',
+    'Artifacts: TBD',
     '未実施です',
     '未記入です',
     'TODO later',
@@ -431,11 +447,107 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
     explorationMode: 'PLAYWRIGHT_CLI',
     status: 'ACTIVE',
     summary: {
-      観測サマリ: '未定義値はnullとして返り、TODOリスト画面は正常に表示された',
+      'Run / 観測環境': '未実施のジョブ件数は0だった / run-001 / 2026-08-15T10:00:00+09:00',
+      観測サマリ: '未定義値はnullとして返り、TODO リスト画面は正常に表示された',
       '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
       Artifacts: 'run-001/artifacts/todo-list/result.png',
     },
   });
+});
+
+test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け入れる', async (t) => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const validContent = buildDoc([config]);
+  const cases = [
+    {
+      name: 'headerなし',
+      content: validContent.replace(
+        '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n',
+        '',
+      ),
+    },
+    {
+      name: 'delimiterなし',
+      content: validContent.replace('|---|---|---|---|---|---|\n', ''),
+    },
+    {
+      name: '7列',
+      content: validContent
+        .replace(
+          '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |',
+          '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 | Extra |',
+        )
+        .replace('|---|---|---|---|---|---|', '|---|---|---|---|---|---|---|')
+        .replace(config.row, config.row.replace(/\|$/, '| extra |')),
+    },
+  ];
+
+  for (const { name, content } of cases) {
+    await t.test(name, () => {
+      const doc = parseDesignDocContent(FILE_PATH, content);
+      assert.deepEqual(doc.checks, []);
+      assert.deepEqual(findOrphanCheckSectionIds(doc), ['E2E-TST-001-PW-01']);
+    });
+  }
+});
+
+test('Check一覧のCode列にescaped pipeを含む有効な6列表を受け入れる', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  config.row = config.row.replace('未実装', '手順A\\|手順B');
+  const doc = parseDesignDocContent(FILE_PATH, buildDoc([config]));
+
+  assert.equal(doc.checks.length, 1);
+  assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
+});
+
+test('探索サマリは正規のheaderとdelimiterを持つ2列表だけを受け入れる', async (t) => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const cases = [
+    {
+      name: 'headerなし',
+      section: config.section.replace(
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
+        '#### 探索サマリ\n\n',
+      ),
+    },
+    {
+      name: 'delimiterなし',
+      section: config.section.replace(
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
+        '#### 探索サマリ\n\n| 項目 | 値 |\n',
+      ),
+    },
+    {
+      name: '3列',
+      section: config.section.replace(
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
+        '#### 探索サマリ\n\n| 項目 | 値 | Extra |\n|---|---|---|\n',
+      ),
+    },
+  ];
+
+  for (const { name, section } of cases) {
+    await t.test(name, () => {
+      const malformed = { ...config, section };
+      const [check] = parseDesignDocContent(FILE_PATH, buildDoc([malformed])).checks;
+      assert.match(
+        validateExplorationSummary(check).join('\n'),
+        /探索サマリ表は「項目」「値」の2列とdelimiter行が必要です/,
+      );
+    });
+  }
 });
 
 test('Areaレジストリを単一のJSON定義から読み取る', () => {

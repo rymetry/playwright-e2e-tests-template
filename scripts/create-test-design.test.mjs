@@ -231,10 +231,16 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
     '_未定_',
     '[TODO](https://example.test/todo)',
     '[TBD](https://example.test/path_(v1))',
+    '[TBD][pending]',
+    '[TBD](https://example.test/path_(v1_(draft)))',
     '&nbsp;TBD&nbsp;',
+    '&emsp;TBD&emsp;',
+    'T&#8203;BD',
+    '<span title="1 > 0">TBD</span>',
     'T<!-- -->BD',
     'TODO',
     'TODO later',
+    '探索理由はTBDです',
     'TODO（探索後に記入）',
     '未記入',
     '未定',
@@ -246,6 +252,10 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
       /具体的な探索不要理由が必要/,
     );
   }
+
+  assert.doesNotThrow(
+    () => check('PW:SMOKE:NONE:TODO リスト画面は仕様上の対象外であるため'),
+  );
 });
 
 test('構造を壊すtemplate token形式の入力を拒否する', () => {

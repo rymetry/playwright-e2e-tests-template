@@ -245,7 +245,15 @@ test('完了した探索のRun / 観測環境を検証する', async (t) => {
     assert.equal(validate(canonical), '');
   });
   await t.test('英数字suffixにplaceholder語を含むcanonical Run IDを受け入れる', () => {
-    assert.equal(validate(canonical.replaceAll('a1b2c3d4', 'TODO1234')), '');
+    const runEnvironment = canonical
+      .replace('a1b2c3d4', 'TODO1234')
+      .replace('a1b2c3d4', 'todo1234');
+    const artifactRunId = runId?.replace('a1b2c3d4', 'TODO1234');
+    assert.equal(validate(runEnvironment), '');
+    assert.equal(
+      validate(runEnvironment, `.playwright/artifacts/${artifactRunId}/result.png`),
+      '',
+    );
   });
   await t.test('同じRun IDを持つheal sessionを受け入れる', () => {
     assert.equal(validate(canonical.replace('Session: explore-', 'Session: heal-')), '');
@@ -277,6 +285,15 @@ test('完了した探索のRun / 観測環境を検証する', async (t) => {
   await t.test('同じRun IDへsuffixを付けた別sessionを拒否する', () => {
     assert.match(
       validate(canonical.replace(/Session: ([^;]+)/, 'Session: $1-stale')),
+      /規定session名ではありません/,
+    );
+  });
+  await t.test('大文字化した別sessionを拒否する', () => {
+    assert.match(
+      validate(canonical.replace(
+        /Session: ([^;]+)/,
+        (_, session) => `Session: ${session.toUpperCase()}`,
+      )),
       /規定session名ではありません/,
     );
   });

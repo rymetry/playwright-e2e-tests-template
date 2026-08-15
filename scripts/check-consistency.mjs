@@ -261,6 +261,15 @@ function artifactsReferenceRunId(artifacts, runId) {
   return artifacts.split(/[\s\/,;:()（）`'"\[\]]+/u).includes(runId);
 }
 
+function containsArtifactPlaceholder(artifacts, rawRunEnvironment) {
+  const { fields } = parseRunEnvironment(rawRunEnvironment);
+  const runId = normalizeMarkdownCode(fields.get('Run ID') ?? '');
+  const placeholderCandidate = RUN_ID_PATTERN.test(runId)
+    ? artifacts.replaceAll(runId, '')
+    : artifacts;
+  return containsContractPlaceholder(placeholderCandidate);
+}
+
 function validateRunEnvironment(check, rawValue, artifacts) {
   const problems = [];
   const { fields, duplicates } = parseRunEnvironment(rawValue);
@@ -302,7 +311,7 @@ function validateRunEnvironment(check, rawValue, artifacts) {
   }
 
   if (check.explorationMode === 'PLAYWRIGHT_CLI') {
-    const session = normalizeMarkdownCode(fields.get('Session') ?? '').toLowerCase();
+    const session = normalizeMarkdownCode(fields.get('Session') ?? '');
     const runIdLower = runId.toLowerCase();
     if (session !== `explore-${runIdLower}` && session !== `heal-${runIdLower}`) {
       problems.push('の探索サマリ「Session」が同じRun IDの規定session名ではありません');
@@ -830,7 +839,10 @@ export function validateExplorationSummary(check) {
       problems.push(`はStatus=${check.status}ですが、観測上の疑問・要判断が解消されていません`);
     }
     const artifacts = summary.fields.get('Artifacts') ?? '';
-    if (artifacts !== 'なし' && containsContractPlaceholder(artifacts)) {
+    if (
+      artifacts !== 'なし' &&
+      containsArtifactPlaceholder(artifacts, runEnvironment)
+    ) {
       problems.push(`はStatus=${check.status}ですが、探索サマリ「Artifacts」が未完了です`);
     }
   }

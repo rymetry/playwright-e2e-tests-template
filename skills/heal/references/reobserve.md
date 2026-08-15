@@ -26,8 +26,9 @@ playwright-cli commandを直接実行する。browser／network操作は通常�
 
 ## 再観測
 
-1. Check IDと時刻を含む一意なsession名で対象URLを開く。以後すべて同じsessionを使う。
-   並行するexplore／healとsession名やartifact pathを共有しない
+1. Run IDを`YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の英数字一意suffix>`形式で生成し、
+   `heal-<Run ID小文字>`を一意なsession名として対象URLを開く。以後すべて同じsessionを
+   使い、並行するexplore／healとsession名やartifact pathを共有しない
 2. open直後、redirect／navigation後、データ変更前に現在のoriginを確認する。
    allowlist外へ移ったら操作せずsessionを閉じる
 3. 元の失敗を再現する最小経路だけを観測する。snapshot／find／evalでrole、accessible
@@ -42,8 +43,9 @@ playwright-cli commandを直接実行する。browser／network操作は通常�
 
 ## healへ返す観測記録
 
-Run ID、Tool / version、Browser、Session、Artifacts、観測日時、origin／build識別子
-（取得可能な場合）、再現経路、Locator候補、完了条件、失敗原因に関係する観測事実を返す。
+`Run ID`、`Tool / version`、`Browser / app`、`Actor`、`Session`、`Observed at`を
+`; `区切りのlabel形式で返す。加えてArtifacts、origin／build識別子（取得可能な場合）、
+再現経路、Locator候補、完了条件、失敗原因に関係する観測事実を返す。
 再観測中はspecやTest Design Docへ書き込まない。healは観測事実と修正案を再評価し、
 「探索サマリ」節とExploration mode列の更新diffをProposalへ含める。探索サマリでは
 再現経路と原因に関係する事実を「観測サマリ」、Locator・完了条件・データ準備の案を

@@ -23,7 +23,18 @@ const FIELD_NAMES = [
   'Artifacts',
 ];
 
-function defaultSummary(explorationMode, status) {
+function completedRunEnvironment(id, explorationMode) {
+  const runId = `20260815-101530-123_${id}_a1b2c3d4`;
+  const tool = explorationMode === 'MANUAL' ? 'manual' : 'test-tool 1.0';
+  const session = explorationMode === 'PLAYWRIGHT_CLI'
+    ? `explore-${runId.toLowerCase()}`
+    : `対象外（${explorationMode.toLowerCase()}）`;
+  return `Run ID: ${runId}; Tool / version: ${tool}; ` +
+    `Browser / app: Chromium / test app; Actor: test actor; Session: ${session}; ` +
+    'Observed at: 2026-08-15T10:15:30+09:00';
+}
+
+function defaultSummary(id, explorationMode, status) {
   if (explorationMode === 'NONE') {
     return {
       'Exploration mode': '`NONE`',
@@ -48,7 +59,7 @@ function defaultSummary(explorationMode, status) {
 
   return {
     'Exploration mode': `\`${explorationMode}\``,
-    'Run / 観測環境': 'run-001 / playwright-cli 1.0 / Chromium / test actor / 2026-08-15T10:00:00+09:00',
+    'Run / 観測環境': completedRunEnvironment(id, explorationMode),
     観測サマリ: '一覧から詳細へ遷移し、保存後に完了表示となる',
     '実装候補（レビュー対象）': '反映済み（Steps / Expected Results）',
     '観測上の疑問・要判断': 'なし',
@@ -77,7 +88,7 @@ function buildCheck({
   summaryOptions,
   extraSummary = false,
 }) {
-  const values = { ...defaultSummary(explorationMode, status), ...summary };
+  const values = { ...defaultSummary(id, explorationMode, status), ...summary };
   const resolvedPurpose = purpose ?? (
     explorationMode === 'NONE'
       ? '対象外（静的な仕様と既存契約から期待結果を確定できるため）'
@@ -133,7 +144,10 @@ test('有効な探索サマリを受け入れる', async (t) => {
         checkMode: 'PW',
         explorationMode: 'PLAYWRIGHT_CLI',
         summary: {
-          'Run / 観測環境': 'run-draft / playwright-cli / Chromium / test actor / 2026-08-15',
+          'Run / 観測環境': completedRunEnvironment(
+            'E2E-TST-001-PW-01',
+            'PLAYWRIGHT_CLI',
+          ),
           観測サマリ: '保存後に非同期で完了表示となる',
           '実装候補（レビュー対象）': 'role=button と完了通知を候補とする',
           '観測上の疑問・要判断': '完了通知の文言が仕様か要確認',
@@ -207,6 +221,70 @@ test('Check一覧と探索サマリのmode不一致を拒否する', () => {
   });
   const [check] = parseChecks([config]);
   assert.match(validateExplorationSummary(check).join('\n'), /Exploration modeが不一致/);
+});
+
+test('完了した探索のRun / 観測環境を検証する', async (t) => {
+  const id = 'E2E-TST-001-PW-01';
+  const canonical = completedRunEnvironment(id, 'PLAYWRIGHT_CLI');
+  const validate = (runEnvironment, artifacts = 'なし') => {
+    const [check] = parseChecks([buildCheck({
+      id,
+      checkMode: 'PW',
+      explorationMode: 'PLAYWRIGHT_CLI',
+      status: 'ACTIVE',
+      summary: {
+        'Run / 観測環境': runEnvironment,
+        Artifacts: artifacts,
+      },
+    })]);
+    return validateExplorationSummary(check).join('\n');
+  };
+
+  await t.test('canonical Run IDと同じRun IDを含むsessionを受け入れる', () => {
+    assert.equal(validate(canonical), '');
+  });
+  await t.test('Run ID labelの欠落を拒否する', () => {
+    assert.match(
+      validate(canonical.replace('Run ID:', 'Execution ID:')),
+      /「Run ID」がありません/,
+    );
+  });
+  await t.test('Run IDの形式不正を拒否する', () => {
+    assert.match(
+      validate(canonical.replace(/Run ID: [^;]+/, 'Run ID: run-001')),
+      /「Run ID」が規定形式ではありません/,
+    );
+  });
+  await t.test('別Check IDのRun IDを拒否する', () => {
+    assert.match(
+      validate(canonical.replaceAll('E2E-TST-001-PW-01', 'E2E-TST-001-PW-02')),
+      /Check IDが対象と一致しません/,
+    );
+  });
+  await t.test('Run IDを含まないsessionを拒否する', () => {
+    assert.match(
+      validate(canonical.replace(/Session: [^;]+/, 'Session: explore-other-run')),
+      /「Session」に同じRun IDが含まれていません/,
+    );
+  });
+  await t.test('必須labelの欠落を拒否する', () => {
+    assert.match(
+      validate(canonical.replace(/; Actor: [^;]+/, '')),
+      /「Actor」がありません/,
+    );
+  });
+  await t.test('タイムゾーンのない観測日時を拒否する', () => {
+    assert.match(
+      validate(canonical.replace('2026-08-15T10:15:30+09:00', '2026-08-15 10:15:30')),
+      /タイムゾーン付きISO日時/,
+    );
+  });
+  await t.test('Artifact pathにRun IDがない場合を拒否する', () => {
+    assert.match(
+      validate(canonical, 'other-run/result.png'),
+      /「Artifacts」に同じRun IDが含まれていません/,
+    );
+  });
 });
 
 test('Check modeとExecution modeの不一致を拒否する', () => {
@@ -488,10 +566,13 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
     explorationMode: 'PLAYWRIGHT_CLI',
     status: 'ACTIVE',
     summary: {
-      'Run / 観測環境': '未実施のジョブ件数は0だった / run-001 / 2026-08-15T10:00:00+09:00',
+      'Run / 観測環境': completedRunEnvironment(
+        'E2E-TST-001-PW-01',
+        'PLAYWRIGHT_CLI',
+      ) + '; Note: 未実施のジョブ件数は0だった',
       観測サマリ: 'Todo item was created。Todo API returned the reviewed response。Todo after reload remained visible。Todo pending count was 0。TODO List screen is visible。未定義値はnullとして返り、TODO リスト画面も正常に表示された',
       '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
-      Artifacts: 'run-001/artifacts/todo-list/result.png',
+      Artifacts: '20260815-101530-123_E2E-TST-001-PW-01_a1b2c3d4/todo-list/result.png',
     },
   });
 });

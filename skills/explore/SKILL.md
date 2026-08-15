@@ -67,7 +67,7 @@ shell commandもrepository rootをworking directoryとして実行する。
 ## 探索の手順
 
 1. 起動ごとにRun IDを
-   `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の一意suffix>`形式で生成する。
+   `YYYYMMDD-HHmmss-SSS_<Check ID>_<8文字の英数字一意suffix>`形式で生成する。
    専用sessionは `playwright-cli -s=explore-<Run ID小文字> open <URL>` とする。
    **以後のすべてのplaywright-cliコマンドに同じ`-s=`を付ける**
 2. **originの再確認**: open直後、redirect・navigationが起きるたび、および
@@ -107,8 +107,10 @@ shell commandもrepository rootをworking directoryとして実行する。
   1. 対象Checkの「**探索サマリ**」節。表の行名はテンプレートと完全一致させる
      （`Exploration mode`／`Run / 観測環境`／`観測サマリ`／
      `実装候補（レビュー対象）`／`観測上の疑問・要判断`／`Artifacts`）。
-     Run / 観測環境にはRun ID、`playwright-cli --version`等の実測値、Browser／対象app／
-     実行actor、秘密情報を含まないSession、タイムゾーン付き観測日時を記録する
+     Run / 観測環境には`Run ID`、`Tool / version`、`Browser / app`、`Actor`、
+     `Session`、`Observed at`のlabelを`; `区切りで記録する。値にはRun ID、
+     `playwright-cli --version`等の実測値、Browser／対象app／実行actor、秘密情報を
+     含まないSession、タイムゾーン付き観測日時を使用する
   2. Check一覧の対象Check行の**Exploration mode列**（実際に使用した値へ更新）
 - 「レビュー済みの期待値」「Assertion設計」「シナリオ」「対象外・未確定」を
   含む上記以外の節には書き込まない。観測は事実であり、期待値ではない

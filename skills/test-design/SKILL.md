@@ -52,7 +52,8 @@ shell commandもrepository rootをworking directoryとして実行する。
    - 各Checkの判定根拠表の「判定」行（placeholderの選択肢表記を`DRAFT`へ）
    - TierとExploration modeは実値を1つ選んで記入する（`SMOKE／REGRESSION`の
      ような選択肢表記のまま残さない）。判断できない場合はユーザーに確認する。
-     探索を予定するPW Checkは`PLAYWRIGHT_CLI`とする
+     探索を予定するPW Checkは`PLAYWRIGHT_CLI`、API Checkは`API_INTEGRATION`、
+     CU Checkは`COMPUTER_USE`、MN Checkは`MANUAL`とする。探索不要なら`NONE`とする
    - テンプレート冒頭のHTMLコメントを削除する
 5. **Execution modeの確定**: 使用するmodeはシナリオとユーザーの入力から判断し、
    判断できない場合は確認する。使用しないmodeのCheckブロック（3.x）と
@@ -67,6 +68,10 @@ shell commandもrepository rootをworking directoryとして実行する。
    - `--skeleton`モード（パターン2）: メタデータ・Check一覧・探索目的だけを
      記入する。未記入の節は雛形の汎用文（実ケースの期待値に見える文）を
      残さず、本文を `未記入（探索後に本記入）` へ置換する。
+   - 探索サマリ: `NONE`ならRun / 観測環境と観測サマリを`なし（探索不要）`、
+     その他を`なし`とする。探索予定のDRAFTならRun / 観測環境を`未実施`、
+     観測サマリ・実装候補・疑問を`未記入（探索後に本記入）`、Artifactsを
+     `なし`とする
 7. **検証**: `npm run check` を実行しPASSすることを確認する。
 8. **報告**: 作成したID・ファイルパス・次のステップを提示する。
    探索が必要なら、対象Check IDを添えて `explore` workflowの明示起動をユーザーへ

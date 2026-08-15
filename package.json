@@ -22,8 +22,9 @@
     "test:ui": "playwright test --ui",
     "test:report": "playwright show-report",
     "typecheck": "tsc -p tsconfig.json",
-    "check": "node scripts/check-consistency.mjs && npm run check:skills",
+    "check": "node scripts/check-consistency.mjs && npm run test:consistency && npm run check:skills",
     "check:skills": "node scripts/check-skills.mjs",
+    "test:consistency": "node --test scripts/check-consistency.test.mjs",
     "test:smoke": "playwright test --grep @smoke --grep-invert @quarantine",
     "test:qualify": "E2E_QUALIFY=1 playwright test --repeat-each=3 --retries=0 --workers=1"
   },

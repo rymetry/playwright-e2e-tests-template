@@ -33,7 +33,7 @@
 | Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |
 |---|---|---|---|---|---|
 | XXX-AREA-000-PW-01 | PLAYWRIGHT | `PLAYWRIGHT_CLI`／`NONE` | SMOKE | DRAFT | `e2e/<area>/XXX-AREA-000.spec.ts` |
-| XXX-AREA-000-API-01 | API | `API_CLIENT`／`NONE` | REGRESSION | DRAFT | `e2e/<area>/XXX-AREA-000.spec.ts` |
+| XXX-AREA-000-API-01 | API | `API_INTEGRATION`／`NONE` | REGRESSION | DRAFT | `e2e/<area>/XXX-AREA-000.spec.ts` |
 | XXX-AREA-000-CU-01 | COMPUTER_USE | `COMPUTER_USE`／`NONE` | REGRESSION | DRAFT | 本書3.3の手順 |
 | XXX-AREA-000-MN-01 | MANUAL | `MANUAL`／`NONE` | REGRESSION | DRAFT | 本書3.4の手順 |
 
@@ -51,7 +51,8 @@ Exploration mode:
 
 - `NONE`: 追加探索が不要
 - `PLAYWRIGHT_CLI`: DOM、ARIA、navigation、network、consoleをPlaywright CLIで探索する
-- `API_CLIENT`: APIクライアントでrequest／responseの実挙動を探索する
+- `API_INTEGRATION`: API／サービス層のrequest、response、認証、永続状態、
+  副作用、外部サービス連携を直接探索する。使用toolは「Run / 観測環境」へ記録する
 - `COMPUTER_USE`: 画面、Canvas、OS UI、ブラウザ拡張機能などを探索する
 - `MANUAL`: 人による確認や判断が必要な対象を探索する
 
@@ -175,30 +176,21 @@ Then:
 - 外部依存、失敗しやすい操作、Assertion候補
 - 探索不要の場合は`対象外（理由）`
 
-#### 探索で確認した事実
+#### 探索サマリ
 
 | 項目 | 値 |
 |---|---|
 | Exploration mode | `NONE`／`PLAYWRIGHT_CLI` |
-| Tool / version | 実際に使用したtoolとversion。未使用なら`なし` |
-| Browser | 実際に使用したbrowser。未使用なら`なし` |
-| Session | 秘密情報を含まない識別子。未使用なら`なし` |
+| Run / 観測環境 | Run ID、tool/version、browser/app/actor、秘密情報を含まないsession、観測日時。未実施なら`未実施` |
+| 観測サマリ | 経路、状態遷移、動的値、外部依存、失敗しやすい操作。未探索なら`未記入（探索後に本記入）` |
+| 実装候補（レビュー対象） | Locator、完了条件、データ準備等の候補。未探索なら`未記入（探索後に本記入）` |
+| 観測上の疑問・要判断 | 意図確認や仕様判断が必要な内容。未探索なら`未記入（探索後に本記入）` |
 | Artifacts | 必要最小限の相対path。未使用なら`なし` |
-| 観測日時 | YYYY-MM-DD HH:mm TZ |
 
-観測事実:
-
-- 通常の利用経路
-- URL originと状態遷移
-- role、name、label、test ID
-- loading、polling、animation
-- 動的な値
-- 必要な範囲のnetwork／console事実
-- 失敗しやすい操作
-- Locator／Assertion候補
-
-ここに記載する内容は観測事実であり、正式な期待値ではない。正式テストへ反映する
-前に、仕様または期待値の責任者によるレビューを行う。
+探索直後の実装候補は正式な設計・期待値ではない。候補をシナリオ、Assertion設計、
+テストデータ、Fixture、前処理、実行契約等へ反映し、疑問を解消してから人間がDoc全体を
+レビューする。レビュー準備完了時は実装候補を`反映済み（反映先）`または`なし`、
+疑問を`なし`とする。`NONE`の場合、探索不要の理由は「探索目的」だけへ記録する。
 
 #### レビュー済みの期待値
 
@@ -240,7 +232,8 @@ EVALUATINGを維持し、原因を記録する。
   - AccessibilityとVisualは`対象外（API Checkのため）`とする
 - 実行契約のPlaywright Projectは`api`等のブラウザ非依存Project、
   またはAPIクライアント設定を記載する
-- 探索のExploration modeは`API_CLIENT`を使用する
+- 探索する場合のExploration modeは`API_INTEGRATION`、追加探索が不要なら`NONE`を
+  使用する。APIクライアントやtoolは「Run / 観測環境」へ記録する
 
 追加で次を明記する。
 
@@ -323,17 +316,19 @@ Playwrightではなく画面操作で実行する理由を記載する（Canvas�
 - 人の判断が必要な箇所の特定
 - 探索不要の場合は`対象外（理由）`
 
-#### 探索で確認した事実
+#### 探索サマリ
 
 | 項目 | 値 |
 |---|---|
 | Exploration mode | `NONE`／`COMPUTER_USE` |
-| Tool / version | 実際に使用したtoolとversion。未使用なら`なし` |
-| 対象アプリ・画面 | 実際に操作した対象。未使用なら`なし` |
+| Run / 観測環境 | Run ID、tool/version、対象アプリ・画面、実行者／エージェント、秘密情報を含まないsession、観測日時。未実施なら`未実施` |
+| 観測サマリ | 到達経路、画面状態、動的値、外部依存、失敗しやすい操作。未探索なら`未記入（探索後に本記入）` |
+| 実装候補（レビュー対象） | 操作対象、完了条件、データ準備等の候補。未探索なら`未記入（探索後に本記入）` |
+| 観測上の疑問・要判断 | 人の判断や仕様確認が必要な内容。未探索なら`未記入（探索後に本記入）` |
 | Artifacts | 必要最小限の相対path。未使用なら`なし` |
-| 観測日時 | YYYY-MM-DD HH:mm TZ |
 
-ここに記載する内容は観測事実であり、正式な期待値ではない。
+実装候補を操作手順、判定基準、実行契約等へ反映し、疑問を解消してから人間が
+Doc全体をレビューする。レビュー準備完了時の値はPW Checkと同じ規則に従う。
 
 #### レビュー済みの期待値
 
@@ -427,16 +422,19 @@ Playwrightではなく画面操作で実行する理由を記載する（Canvas�
 - 判定基準の候補
 - 探索不要の場合は`対象外（理由）`
 
-#### 探索で確認した事実
+#### 探索サマリ
 
 | 項目 | 値 |
 |---|---|
 | Exploration mode | `NONE`／`MANUAL` |
-| 対象アプリ・画面 | 実際に確認した対象。未実施なら`なし` |
+| Run / 観測環境 | Run ID、対象アプリ・画面、実行者、観測日時。未実施なら`未実施` |
+| 観測サマリ | 到達経路、確認対象、動的値、外部依存、判断が難しい箇所。未探索なら`未記入（探索後に本記入）` |
+| 実装候補（レビュー対象） | 操作手順、判定基準、記録方法等の候補。未探索なら`未記入（探索後に本記入）` |
+| 観測上の疑問・要判断 | 仕様責任者や実行者の判断が必要な内容。未探索なら`未記入（探索後に本記入）` |
 | Artifacts | 必要最小限の相対path。未使用なら`なし` |
-| 観測日時 | YYYY-MM-DD HH:mm TZ |
 
-ここに記載する内容は観測事実であり、正式な期待値ではない。
+実装候補を操作手順、判定基準、実行契約等へ反映し、疑問を解消してから人間が
+Doc全体をレビューする。レビュー準備完了時の値はPW Checkと同じ規則に従う。
 
 #### レビュー済みの期待値
 

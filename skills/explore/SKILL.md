@@ -1,6 +1,6 @@
 ---
 name: explore
-description: playwright-cli skillで対象のPW Checkを探索し、結果をTest Design Docの「探索で確認した事実」へ記録する
+description: playwright-cli skillで対象のPW Checkを探索し、必要な結果をTest Design Docの「探索サマリ」へ記録する
 argument-hint: "<Check ID> [探索対象の補足]"
 disable-model-invocation: true
 ---
@@ -76,7 +76,7 @@ shell commandもrepository rootをworking directoryとして実行する。
    かつ**専用のテストデータとして一意に識別できる対象に限る**。既存・共有
    データの変更、対象を一意に特定できない場合、後処理の見込みが立たない
    場合はmutationを行わず停止して報告する。作成したデータは終了時に削除する
-4. 観測する内容（Docの「探索で確認した事実」の項目に対応）:
+4. 観測する内容:
    - 通常の利用経路、URL originと状態遷移
    - `snapshot`／`find`／`eval` によるrole・accessible name・test ID
      （安定Locator候補）
@@ -87,8 +87,8 @@ shell commandもrepository rootをworking directoryとして実行する。
      `localstorage-get`等）は行わない。query文字列の値は記録前に除去する。
      `console`は秘密情報を含まないと確認できる範囲でのみ記録する
    - 失敗しやすい操作、動的な値
-5. 生成物（screenshot等）は必要最小限とし、
-   `.playwright/artifacts/<Run ID>/` へ保存する。
+5. 生成物（screenshot等）は必要な場合だけ最小限作成し、
+   `.playwright/artifacts/<Run ID>/` へ保存する。`exploration.md`は必須としない。
    Run IDは `YYYYMMDD-HHmm_<Check ID>` 形式。このディレクトリはGit管理外
 6. 対象がPlaywright CLIで十分に観測できない場合（Canvas描画、OS UI、
    ブラウザ拡張機能等）は、無理に続けず、観測できた範囲とCOMPUTER_USE探索が
@@ -100,14 +100,19 @@ shell commandもrepository rootをworking directoryとして実行する。
 
 - Docへの書き込みは次の**2箇所のみ**とする（唯一の例外は「対象の特定」で
   定めた開始前の探索目的の記入。ユーザーに確認した内容に限る）。
-  1. 対象Checkの「**探索で確認した事実**」節。表の行名はテンプレートと
-     完全一致させる（`Exploration mode`／`Tool / version`／`Browser`／
-     `Session`／`Artifacts`／`観測日時`。タイムゾーンは観測日時の値に含める）。
-     `Tool / version` は `playwright-cli --version` 等の実測値を記録する
+  1. 対象Checkの「**探索サマリ**」節。表の行名はテンプレートと完全一致させる
+     （`Exploration mode`／`Run / 観測環境`／`観測サマリ`／
+     `実装候補（レビュー対象）`／`観測上の疑問・要判断`／`Artifacts`）。
+     Run / 観測環境にはRun ID、`playwright-cli --version`等の実測値、Browser／対象app／
+     実行actor、秘密情報を含まないSession、タイムゾーン付き観測日時を記録する
   2. Check一覧の対象Check行の**Exploration mode列**（実際に使用した値へ更新）
 - 「レビュー済みの期待値」「Assertion設計」「シナリオ」「対象外・未確定」を
   含む上記以外の節には書き込まない。観測は事実であり、期待値ではない
-- 期待値の候補・疑問点はDocに書かず、完了報告に記載して人間の判断を仰ぐ
+- 観測サマリには設計・実装・healに必要な事実だけを書く。全試行、全Locator候補、
+  全network／console出力は保存しない
+- Locator、完了条件、データ準備等は「実装候補（レビュー対象）」へ書き、
+  正式な設計や採用済みの内容として扱わない。観測した挙動の意図や仕様上の疑問は
+  「観測上の疑問・要判断」と完了報告の両方へ記載する。期待値案は発明しない
 - Artifacts欄にはRun IDと必要最小限の相対pathだけを記録する
 
 ## 禁止事項
@@ -127,4 +132,6 @@ shell commandもrepository rootをworking directoryとして実行する。
    ないか）
 3. 次工程の明示: パターン1（仕様起点）では「観測を踏まえたDocの修正」、
    パターン2（探索起点）では「Docの本記入」。いずれも、その後に期待値レビューへ
-   進む
+   進む。実装候補を正式な設計項目へ反映し、反映しない候補を除去し、疑問を
+   解消した時点で、実装候補を`反映済み（反映先）`または`なし`、疑問を`なし`へ
+   更新する

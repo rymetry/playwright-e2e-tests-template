@@ -24,8 +24,8 @@ shell commandもrepository rootをworking directoryとして実行する。
 3. 自分で修正してよいのは **(a) Locator (b) 待機条件 (c) テストデータ準備**
    の3領域のみ。期待値・Assertion設計・シナリオ・3領域外のテスト実装に触れる
    変更は行わず、該当する既存フローを案内して停止する
-4. **元の失敗をPASSに書き換えない。** 失敗の記録・証跡は上書き・削除しない
-   （再現実行の前に必ず退避する。手順1）。PASSは修正適用後の新しい
+4. **元の失敗をPASSに書き換えない。** activeなheal中は失敗の一次記録と補助証跡を
+   上書き・削除しない（再現実行の前に必ず退避する。手順1）。PASSは修正適用後の新しい
    Qualification（README 4.1）でのみ成立する
 5. **ブラウザでの再観測は、heal専用のhost中立な
    [再観測手順](references/reobserve.md)をこの起動内で読み、続けて実行する。**
@@ -103,10 +103,12 @@ shell commandもrepository rootをworking directoryとして実行する。
   分析は継続する**（「大半が落ちているから」という理由だけで全体を停止しない）。
   環境障害と確定する際は、可能な範囲で独立した裏付け（対象環境への到達確認、
   同一originの他Checkの成否）を根拠に添える
-- クラスタごとに、証跡とDocの「レビュー済みの期待値」「探索で確認した事実」
+- クラスタごとに、証跡とDocの「レビュー済みの期待値」「探索サマリ」
   「シナリオ」を突合して分類する。数値の確信度（confidence）は出力せず、
   根拠となった観測事実を列挙する。1クラスタ内で根拠が分かれた場合は
   クラスタを分割する（異なる分類を混在させない）
+- 分類はDocの一次記録と現在の失敗証跡を正とし、完了済みworkflowで管理者が削除した
+  過去の探索Artifact、元失敗証跡、Qualificationレポートの恒久保持を前提にしない
 
 | 分類 | 主な手がかり | 扱い |
 |---|---|---|
@@ -129,7 +131,7 @@ shell commandもrepository rootをworking directoryとして実行する。
 - 再観測が必要なら、対象Checkごとに[再観測手順](references/reobserve.md)を読み、
   同じheal起動内で続けて実行する。公開`explore` skillは単独探索用であり、healから
   起動・代行しない。この参照fileはskill discovery対象でもhost固有の起動入口でもない
-- 再観測で得たTool/version、Browser、Session、Artifacts、観測日時、origin／build識別子
+- 再観測で得たRun ID、Tool/version、Browser、Session、Artifacts、観測日時、origin／build識別子
   （取得可能な場合）、観測事実を、元の失敗証跡と対象Checkへ照合する。
   allowlist、認証、session cleanup、証跡の鮮度に未解決事項がある場合は結果を使わず、
   Proposalへ進まない
@@ -152,7 +154,7 @@ shell commandもrepository rootをworking directoryとして実行する。
 
 - クラスタ単位の提案として次を提示し、Proposal IDを付けて停止する:
   分類、根拠（観測事実の列挙）、意味的契約の確認結果、対象Check一覧、
-  修正diff、再観測で更新するDocの観測記録diff、禁止変更リストとの照合結果、
+  修正diff、再観測で更新するDocの探索サマリdiff、禁止変更リストとの照合結果、
   再Qualificationの所要見込み、対象scopeと対象scope外の並行変更一覧。
   再観測を省略した場合は理由を記す
 - 状態変化後の再評価、または再観測を行うたびに新しいProposal IDを発行する。
@@ -181,7 +183,9 @@ shell commandもrepository rootをworking directoryとして実行する。
   README 6.1 禁止12）
 - healが更新してよいDoc節は「Test Status判定根拠」と**Check一覧のStatus列のみ**。
   再観測を実行した場合に限り、Proposalへ含めたexact diffどおりに対象Checkの
-  「探索で確認した事実」節とCheck一覧の**Exploration mode列**も更新してよい。
+  「探索サマリ」節とCheck一覧の**Exploration mode列**も更新してよい。承認済み修正を
+  適用したら「実装候補（レビュー対象）」を`反映済み（Proposal IDと反映先）`または
+  `なし`へ更新し、解消した「観測上の疑問・要判断」は`なし`とする。
   「レビュー済みの期待値」「Assertion設計」「シナリオ」は変更しない。修正により
   「テストデータ」「前処理」「Fixture」等の節と乖離が生じる場合は提案にその旨を
   含め、当該節の改訂は通常のDoc改訂フロー（人間レビュー）へ回す
@@ -239,7 +243,7 @@ specへの `{ tag: '@quarantine' }` 付与、Check一覧のStatus更新、
 4. CheckごとのStatus遷移とDoc更新箇所
 5. 人間に判断してほしい点（プロダクトバグ疑いの内容、仕様変更の確認先、
    QUARANTINE提案の採否など）
-6. 元の失敗の証跡参照（退避先を含む。消していないことの明示）
+6. 元の失敗の証跡参照（退避先を含む。activeなheal中に消していないことの明示）
 
 ## 禁止事項
 
@@ -247,4 +251,5 @@ specへの `{ tag: '@quarantine' }` 付与、Check一覧のStatus更新、
 - ユーザー承認前のspec・Doc変更
 - [再観測手順](references/reobserve.md)の範囲外でplaywright-cliを直接操作すること
 - 退避せずに再現実行して元の証跡を失わせること
-- 元の失敗の証跡・記録・Qualification記録の上書き・削除
+- 一次記録の上書き・削除、およびactiveなheal／Qualification中の補助証跡の
+  上書き・削除。完了後の管理者による補助証跡の手動削除はREADME 6章に従い許可する

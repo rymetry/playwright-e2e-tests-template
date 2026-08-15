@@ -12,7 +12,7 @@
  * 処理の流れ:
  *   Step 1. test-designs/e2e・test-designs/int 配下のDesign Docを収集しパースする
  *   Step 2. e2e配下の*.spec.tsを収集し、test()のタイトルとタグをパースする
- *   Step 3. DocとspecをルールNo.1〜9で突き合わせ、問題を収集する
+ *   Step 3. DocとspecをルールNo.1〜10で突き合わせ、問題を収集する
  *   Step 4. 結果を出力し、問題が1件でもあればexit 1で終了する
  *
  * チェックルール一覧:
@@ -25,6 +25,7 @@
  *   No.7 Tier=SMOKEとテストの@smokeタグが両方向で一致する
  *   No.8 CU/MN CheckのIDがspecに存在しない（自動実行対象ではないため）
  *   No.9 specの全タイトルがCheck IDで始まり、そのIDがいずれかのDocに存在する
+ *   No.10 各Checkの探索サマリが必須構造・mode・Statusごとの状態契約に従う
  *
  * タグ（No.6・No.7）は `{ tag: '@smoke' }` オプション（公式推奨）と
  * タイトル内埋め込みの両方を検出する。ただしtest()直下のみ対応し、
@@ -52,6 +53,28 @@ const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 const STATUSES_REQUIRING_SPEC = new Set(['EVALUATING', 'ACTIVE', 'QUARANTINE']);
 // 自動実行されるExecution mode（specと突き合わせる対象）
 const AUTOMATED_MODES = new Set(['PW', 'API']);
+export const VALID_EXPLORATION_MODES_BY_CHECK_MODE = new Map([
+  ['PW', new Set(['NONE', 'PLAYWRIGHT_CLI'])],
+  ['API', new Set(['NONE', 'API_INTEGRATION'])],
+  ['CU', new Set(['NONE', 'COMPUTER_USE'])],
+  ['MN', new Set(['NONE', 'MANUAL'])],
+]);
+const EXPLORATION_SUMMARY_FIELDS = [
+  'Exploration mode',
+  'Run / 観測環境',
+  '観測サマリ',
+  '実装候補（レビュー対象）',
+  '観測上の疑問・要判断',
+  'Artifacts',
+];
+const EXPLORATION_PLACEHOLDER = /未実施|未記入（探索後に本記入）/;
+const NONE_EXPLORATION_SUMMARY_VALUES = new Map([
+  ['Run / 観測環境', 'なし（探索不要）'],
+  ['観測サマリ', 'なし（探索不要）'],
+  ['実装候補（レビュー対象）', 'なし'],
+  ['観測上の疑問・要判断', 'なし'],
+  ['Artifacts', 'なし'],
+]);
 
 /** 検出した問題の蓄積先。{ file, message } の配列 */
 const issues = [];
@@ -96,6 +119,80 @@ function rel(filePath) {
  */
 function parseDesignDoc(filePath) {
   const content = readFileSync(filePath, 'utf8');
+  return parseDesignDocContent(filePath, content);
+}
+
+function normalizeMarkdownCode(value) {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^`([^`]*)`$/);
+  return (match?.[1] ?? trimmed).trim();
+}
+
+function extractCheckSection(content, checkId) {
+  const lines = content.split('\n');
+  const headingIndex = lines.findIndex(
+    (line) => /^###\s/.test(line) && line.includes(checkId)
+  );
+  if (headingIndex === -1) {
+    return undefined;
+  }
+
+  let endIndex = lines.length;
+  for (let i = headingIndex + 1; i < lines.length; i += 1) {
+    if (/^###\s/.test(lines[i] ?? '')) {
+      endIndex = i;
+      break;
+    }
+  }
+  return lines.slice(headingIndex, endIndex).join('\n');
+}
+
+function extractSubsection(section, heading) {
+  const lines = section.split('\n');
+  const headingIndex = lines.findIndex((line) => line.trim() === `#### ${heading}`);
+  if (headingIndex === -1) {
+    return undefined;
+  }
+
+  let endIndex = lines.length;
+  for (let i = headingIndex + 1; i < lines.length; i += 1) {
+    if (/^####\s/.test(lines[i] ?? '')) {
+      endIndex = i;
+      break;
+    }
+  }
+  return lines.slice(headingIndex + 1, endIndex).join('\n');
+}
+
+function parseExplorationSummary(section) {
+  const headingCount = [...section.matchAll(/^#### 探索サマリ\s*$/gm)].length;
+  const body = extractSubsection(section, '探索サマリ');
+  const fields = new Map();
+  const duplicates = new Set();
+
+  if (body !== undefined) {
+    for (const line of body.split('\n')) {
+      const match = line.match(/^\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*$/);
+      if (!match) {
+        continue;
+      }
+      const key = match[1].trim();
+      const value = match[2].trim();
+      if (key === '項目' || /^-+$/.test(key)) {
+        continue;
+      }
+      if (fields.has(key)) {
+        duplicates.add(key);
+      } else {
+        fields.set(key, value);
+      }
+    }
+  }
+
+  return { headingCount, fields, duplicates };
+}
+
+export function parseDesignDocContent(filePath, content) {
   const lines = content.split('\n');
 
   const parentMatch = content.match(/\|\s*Parent Case ID\s*\|\s*([^|]+)\|/);
@@ -116,12 +213,14 @@ function parseDesignDoc(filePath) {
 
     checks.push({
       id,
+      explorationMode: normalizeMarkdownCode(cells[3] ?? ''),
       tier: cells[4] ?? '',
       status: cells[5] ?? '',
       // MODE部分（PW/API/CU/MN）。ID形式が不正な場合はundefined
       mode: id.match(CHECK_ID_PATTERN)?.[2],
       // このCheckの節にある「Test Status判定根拠」表の判定値
       judgement: extractJudgement(content, id),
+      section: extractCheckSection(content, id),
     });
   }
 
@@ -134,26 +233,103 @@ function parseDesignDoc(filePath) {
  * 見出しまたは判定行が見つからない場合はundefinedを返す。
  */
 function extractJudgement(content, checkId) {
-  const lines = content.split('\n');
-  const headingIndex = lines.findIndex(
-    (line) => /^#{3,4}\s/.test(line) && line.includes(checkId)
-  );
-  if (headingIndex === -1) {
+  const section = extractCheckSection(content, checkId);
+  if (section === undefined) {
     return undefined;
   }
 
-  for (let i = headingIndex + 1; i < lines.length; i += 1) {
-    const line = lines[i] ?? '';
-    if (/^###\s/.test(line)) {
-      break; // 次のCheckの節に入ったら打ち切り
-    }
-
+  for (const line of section.split('\n')) {
     const judgementMatch = line.match(/^\|\s*判定\s*\|\s*([^|]+)\|/);
     if (judgementMatch) {
       return judgementMatch[1].trim();
     }
   }
   return undefined;
+}
+
+export function validateExplorationSummary(check) {
+  const problems = [];
+  if (check.section === undefined) {
+    problems.push('のCheck節が見つかりません');
+    return problems;
+  }
+
+  const summary = parseExplorationSummary(check.section);
+  if (summary.headingCount !== 1) {
+    problems.push(`の「探索サマリ」は1件必要です（現在: ${summary.headingCount}件）`);
+  }
+  for (const field of EXPLORATION_SUMMARY_FIELDS) {
+    if (!summary.fields.has(field)) {
+      problems.push(`の探索サマリに「${field}」行がありません`);
+    } else if ((summary.fields.get(field) ?? '').trim() === '') {
+      problems.push(`の探索サマリ「${field}」が空です`);
+    }
+  }
+  for (const field of summary.duplicates) {
+    problems.push(`の探索サマリ「${field}」行が重複しています`);
+  }
+
+  const summaryModeValue = summary.fields.get('Exploration mode');
+  if (summaryModeValue === undefined) {
+    return problems;
+  }
+  const summaryMode = normalizeMarkdownCode(summaryModeValue);
+  if (summaryMode !== check.explorationMode) {
+    problems.push(
+      `のExploration modeが不一致です（Check一覧: ${check.explorationMode} / ` +
+      `探索サマリ: ${summaryMode}）`
+    );
+  }
+
+  const allowedModes = VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(check.mode);
+  if (allowedModes !== undefined && !allowedModes.has(check.explorationMode)) {
+    problems.push(
+      `のExploration mode「${check.explorationMode}」はCheck mode=${check.mode}では使用できません`
+    );
+  }
+
+  if (check.explorationMode === 'NONE') {
+    for (const [field, expected] of NONE_EXPLORATION_SUMMARY_VALUES) {
+      const actual = summary.fields.get(field);
+      if (actual !== undefined && actual !== expected) {
+        problems.push(
+          `はExploration mode=NONEですが、探索サマリ「${field}」が「${expected}」ではありません`
+        );
+      }
+    }
+    const purpose = extractSubsection(check.section, '探索目的') ?? '';
+    const reason = purpose.match(/対象外（([^）]+)）/s)?.[1].trim();
+    if (reason === undefined || reason === '' || reason === '理由') {
+      problems.push('はExploration mode=NONEですが、「探索目的」に具体的な対象外理由がありません');
+    }
+  }
+
+  if (check.explorationMode !== 'NONE' && check.status !== 'DRAFT') {
+    for (const field of [
+      'Run / 観測環境',
+      '観測サマリ',
+      '実装候補（レビュー対象）',
+      '観測上の疑問・要判断',
+    ]) {
+      const value = summary.fields.get(field) ?? '';
+      if (EXPLORATION_PLACEHOLDER.test(value)) {
+        problems.push(`はStatus=${check.status}ですが、探索サマリ「${field}」が未完了です`);
+      }
+    }
+
+    const candidate = summary.fields.get('実装候補（レビュー対象）') ?? '';
+    if (candidate !== 'なし' && !/^反映済み（.+）$/.test(candidate)) {
+      problems.push(
+        `はStatus=${check.status}ですが、実装候補が「反映済み（反映先）」または「なし」ではありません`
+      );
+    }
+    const question = summary.fields.get('観測上の疑問・要判断') ?? '';
+    if (question !== 'なし') {
+      problems.push(`はStatus=${check.status}ですが、観測上の疑問・要判断が解消されていません`);
+    }
+  }
+
+  return problems;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +456,11 @@ function main() {
         continue; // Statusが読めない場合、以降のStatus依存チェックは行えない
       }
 
+      // ルールNo.10: 探索サマリの構造・mode・Statusごとの状態契約
+      for (const problem of validateExplorationSummary(check)) {
+        report(docPath, `「${check.id}」${problem}`);
+      }
+
       // ルールNo.4: Check一覧のStatusと判定根拠表の判定の一致
       if (check.judgement === undefined) {
         report(docPath, `「${check.id}」のTest Status判定根拠（| 判定 | 行）が見つかりません`);
@@ -364,4 +545,6 @@ function main() {
   process.exitCode = 1;
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

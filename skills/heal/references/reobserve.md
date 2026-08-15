@@ -41,8 +41,11 @@ playwright-cli commandを直接実行する。browser／network操作は通常�
 
 ## healへ返す観測記録
 
-Tool / version、Browser、Session、Artifacts、観測日時、origin／build識別子（取得可能な
-場合）、再現経路、Locator候補、完了条件、失敗原因に関係する観測事実を返す。
+Run ID、Tool / version、Browser、Session、Artifacts、観測日時、origin／build識別子
+（取得可能な場合）、再現経路、Locator候補、完了条件、失敗原因に関係する観測事実を返す。
 再観測中はspecやTest Design Docへ書き込まない。healは観測事実と修正案を再評価し、
-「探索で確認した事実」節とExploration mode列の更新diffをProposalへ含める。
+「探索サマリ」節とExploration mode列の更新diffをProposalへ含める。探索サマリでは
+再現経路と原因に関係する事実を「観測サマリ」、Locator・完了条件・データ準備の案を
+「実装候補（レビュー対象）」、未解決の意図確認を「観測上の疑問・要判断」へ分ける。
+承認・適用後は実装候補を`反映済み（Proposal IDと反映先）`または`なし`へ更新する。
 レビュー済みの期待値、Assertion設計、シナリオ、対象外・未確定は変更しない。

@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -60,6 +68,15 @@ function runWriterProcess(root, input, startAt) {
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
+}
+
+function writeParentLock(root, owner, mtime = new Date()) {
+  const outputDirectory = join(root, 'test-designs/e2e/auth');
+  mkdirSync(outputDirectory, { recursive: true });
+  const lockPath = join(outputDirectory, '.E2E-AUTH-001.create.lock');
+  writeFileSync(lockPath, JSON.stringify(owner));
+  utimesSync(lockPath, mtime, mtime);
+  return lockPath;
 }
 
 function assertGeneratedDocIsStructurallyValid(markdown, expectedChecks) {
@@ -278,4 +295,74 @@ test('同じParent Case IDの並行生成は1件だけ成功する', async (t) =
   const outputFiles = readdirSync(outputDirectory);
   assert.equal(outputFiles.filter((name) => name.endsWith('.md')).length, 1);
   assert.equal(outputFiles.some((name) => name.endsWith('.create.lock')), false);
+});
+
+test('所有プロセスが生存しているactiveロックは回収しない', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-active-lock-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const lockPath = writeParentLock(root, {
+    pid: process.pid,
+    token: 'active-owner',
+    createdAt: '2020-01-01T00:00:00.000Z',
+  }, new Date('2020-01-01T00:00:00.000Z'));
+
+  assert.throws(
+    () => writeTestDesign({
+      ...BASE_INPUT,
+      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    }, root),
+    /生成処理が進行中です/,
+  );
+  assert.equal(JSON.parse(readFileSync(lockPath, 'utf8')).token, 'active-owner');
+});
+
+test('所有情報が壊れている古いstaleロックを回収して生成できる', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-stale-lock-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const lockPath = writeParentLock(root, {}, new Date('2020-01-01T00:00:00.000Z'));
+  writeFileSync(lockPath, '');
+  utimesSync(
+    lockPath,
+    new Date('2020-01-01T00:00:00.000Z'),
+    new Date('2020-01-01T00:00:00.000Z'),
+  );
+  const input = {
+    ...BASE_INPUT,
+    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+  };
+
+  const outputPath = writeTestDesign(input, root);
+  assert.match(readFileSync(outputPath, 'utf8'), /E2E-AUTH-001-PW-01/);
+  assert.equal(
+    readdirSync(dirname(outputPath)).some((name) => name.endsWith('.create.lock')),
+    false,
+  );
+});
+
+test('終了済み所有プロセスのstaleロックを直ちに回収できる', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-dead-lock-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const owner = spawn(process.execPath, ['--eval', '']);
+  const ownerPid = owner.pid;
+  await new Promise((resolve, reject) => {
+    owner.once('error', reject);
+    owner.once('close', resolve);
+  });
+  assert.ok(Number.isSafeInteger(ownerPid));
+  writeParentLock(root, {
+    pid: ownerPid,
+    token: 'dead-owner',
+    createdAt: new Date().toISOString(),
+  });
+  const input = {
+    ...BASE_INPUT,
+    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+  };
+
+  const outputPath = writeTestDesign(input, root);
+  assert.match(readFileSync(outputPath, 'utf8'), /E2E-AUTH-001-PW-01/);
+  assert.equal(
+    readdirSync(dirname(outputPath)).some((name) => name.endsWith('.create.lock')),
+    false,
+  );
 });

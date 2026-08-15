@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
+import { randomUUID } from 'node:crypto';
 import {
   closeSync,
   mkdirSync,
   openSync,
   readFileSync,
   readdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -23,6 +25,8 @@ const PARENT_ID_PATTERN = /^(E2E|INT)-([A-Z]{2,6})-(\d{3})$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 const PLACEHOLDER_PATTERN = /{{[A-Z0-9_]+}}/g;
+// PIDを読み取れない破損ロックだけを、同期的な生成処理として十分長い時間後に回収する。
+const PARENT_LOCK_STALE_AFTER_MS = 60_000;
 
 const MODE_CONFIG = new Map([
   ['PW', {
@@ -281,6 +285,116 @@ export function outputPathFor(input, root = ROOT) {
   );
 }
 
+function isProcessAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== 'ESRCH';
+  }
+}
+
+function readLockSnapshot(lockPath) {
+  const stat = statSync(lockPath);
+  let owner;
+  try {
+    owner = JSON.parse(readFileSync(lockPath, 'utf8'));
+  } catch {
+    owner = undefined;
+  }
+  return { stat, owner };
+}
+
+function removeStaleParentLock(lockPath) {
+  let snapshot;
+  try {
+    snapshot = readLockSnapshot(lockPath);
+  } catch (error) {
+    return error?.code === 'ENOENT';
+  }
+
+  const age = Date.now() - snapshot.stat.mtimeMs;
+  const hasOwnerPid = Number.isSafeInteger(snapshot.owner?.pid) && snapshot.owner.pid > 0;
+  const isStale = hasOwnerPid
+    ? !isProcessAlive(snapshot.owner.pid)
+    : age > PARENT_LOCK_STALE_AFTER_MS;
+  if (!isStale) {
+    return false;
+  }
+
+  try {
+    const current = statSync(lockPath);
+    if (
+      current.dev !== snapshot.stat.dev ||
+      current.ino !== snapshot.stat.ino ||
+      current.mtimeMs !== snapshot.stat.mtimeMs ||
+      current.size !== snapshot.stat.size
+    ) {
+      return false;
+    }
+    unlinkSync(lockPath);
+    return true;
+  } catch (error) {
+    return error?.code === 'ENOENT';
+  }
+}
+
+function acquireParentLock(lockPath, parentId) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const token = randomUUID();
+    let fileDescriptor;
+    try {
+      fileDescriptor = openSync(lockPath, 'wx');
+    } catch (error) {
+      if (error?.code === 'EEXIST' && attempt === 0 && removeStaleParentLock(lockPath)) {
+        continue;
+      }
+      if (error?.code === 'EEXIST') {
+        throw new Error(`Parent Case ID「${parentId}」の生成処理が進行中です`);
+      }
+      throw error;
+    }
+
+    try {
+      writeFileSync(fileDescriptor, JSON.stringify({
+        pid: process.pid,
+        token,
+        createdAt: new Date().toISOString(),
+      }));
+    } catch (error) {
+      try {
+        closeSync(fileDescriptor);
+      } finally {
+        unlinkSync(lockPath);
+      }
+      throw error;
+    }
+    return { fileDescriptor, token };
+  }
+  throw new Error(`Parent Case ID「${parentId}」の生成ロックを取得できませんでした`);
+}
+
+function releaseParentLock(lockPath, lock) {
+  try {
+    closeSync(lock.fileDescriptor);
+  } finally {
+    let owner;
+    try {
+      owner = JSON.parse(readFileSync(lockPath, 'utf8'));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    if (owner?.token === lock.token) {
+      unlinkSync(lockPath);
+    }
+  }
+}
+
 export function writeTestDesign(input, root = ROOT) {
   const outputPath = outputPathFor(input, root);
   const outputDirectory = dirname(outputPath);
@@ -288,15 +402,7 @@ export function writeTestDesign(input, root = ROOT) {
   mkdirSync(outputDirectory, { recursive: true });
 
   const lockPath = join(outputDirectory, `.${input.parentId}.create.lock`);
-  let lockFile;
-  try {
-    lockFile = openSync(lockPath, 'wx');
-  } catch (error) {
-    if (error?.code === 'EEXIST') {
-      throw new Error(`Parent Case ID「${input.parentId}」の生成処理が進行中です`);
-    }
-    throw error;
-  }
+  const lock = acquireParentLock(lockPath, input.parentId);
 
   try {
     const existingFile = readdirSync(outputDirectory)
@@ -311,11 +417,7 @@ export function writeTestDesign(input, root = ROOT) {
     writeFileSync(outputPath, markdown, { encoding: 'utf8', flag: 'wx' });
     return outputPath;
   } finally {
-    try {
-      closeSync(lockFile);
-    } finally {
-      unlinkSync(lockPath);
-    }
+    releaseParentLock(lockPath, lock);
   }
 }
 

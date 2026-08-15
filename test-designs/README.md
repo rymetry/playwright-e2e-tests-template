@@ -24,6 +24,11 @@ Suite（機能領域 = Area）
 - **Check**: 「どう検証するか」の実行単位。同じシナリオでもPlaywright実行、
   Computer Use実行、Manual実行はそれぞれ別Checkとして設計する。
 
+テンプレートのソースは、Parent Case共通部とExecution mode別のCheck部品に分ける。
+`npm run create:test-design`が必要な部品を組み立て、最終成果物は必ず上記の
+**1シナリオ1ファイル**にする。テンプレート部品自体をDesign Docとして運用したり、
+手作業でコピー・結合したりしない。
+
 ## 2. ID命名規則
 
 ### 2.1 Parent Case ID
@@ -221,6 +226,9 @@ Qualificationを再実施する。
   baseURL相対のパスだけを使い、絶対URLをハードコードしない。
 - CU／MANUAL Checkでは、操作開始前に表示中のURL originが許可済み環境と
   一致することを確認し、結果を証跡へ残す。
+- CU Checkの操作は座標ではなく、利用者が識別できる画面要素と操作結果で記述する。
+  座標依存操作が不可避な場合だけ、使用理由、解像度、表示倍率、ウィンドウ位置、
+  基準画像またはアンカー要素、操作後の観測可能な完了条件を記録する。
 - 認証情報をterminal、artifact、Test Design Docへ出力しない。
 
 ## 6. 運用フロー
@@ -230,6 +238,46 @@ Doc作成は `test-design`、探索は `explore` workflowで実行できる。�
 2パターンを使い分ける。
 **どちらもDoc（ID採番）が先**であり、探索結果のうち設計・実装・healに必要な
 内容は「探索サマリ」へ着地する。探索中の全試行や全出力は保存対象としない。
+
+### 6.0 Test Design Docの生成
+
+テンプレートの構成は次のとおり。
+
+```text
+test-designs/templates/
+├── test-design-doc-template.md
+└── checks/
+    ├── pw-check-template.md
+    ├── api-check-template.md
+    ├── cu-check-template.md
+    └── mn-check-template.md
+```
+
+- `test-design-doc-template.md`: メタデータ、目的、品質リスク、Check一覧、関連仕様の共通部
+- `checks/*.md`: modeごとの完全なCheck構造。別のCheckテンプレートを参照して補完しない
+- `scripts/create-test-design.mjs`: Check一覧、Check ID、章番号、探索サマリ初期値を構成する
+
+直接コピーする代わりに、次の生成コマンドを使用する。
+
+```bash
+npm run create:test-design -- \
+  --parent-id E2E-AUTH-001 \
+  --title "ログイン成功" \
+  --slug login-success \
+  --check PW:SMOKE:PLAYWRIGHT_CLI
+```
+
+`--check`は`<MODE>:<TIER>:<EXPLORATION_MODE>`形式で複数指定できる。同じMODEを
+複数指定した場合は`-01`、`-02`の順に採番する。Exploration modeを`NONE`にする
+場合は、理由を推測で生成しないよう、第4要素へ具体的理由を指定する。
+
+```bash
+--check API:REGRESSION:NONE:契約仕様だけで期待結果を確定できるため
+```
+
+生成先は命名規則から自動決定され、Parent CaseごとにMarkdownを1ファイルだけ作る。
+既存ファイルは上書きしない。生成後、`test-design` workflowがケース固有の本文を記入し、
+`npm run check`で構造と整合性を検証する。
 
 Exploration modeはCheck modeごとに次の値だけを使用する。
 

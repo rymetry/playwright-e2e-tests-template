@@ -164,4 +164,4 @@ Then:
 ## 4. 関連仕様
 
 - テンプレート運用ルール: `test-designs/README.md`
-- Design Docテンプレート: `test-designs/templates/test-design-doc-template.md`
+- Design Doc生成・記入規則: `test-designs/README.md` 6章

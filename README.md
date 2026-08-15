@@ -112,7 +112,7 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 
 - 管理ルール（ID命名規則、Tier、Status、昇格条件、スイート拡張方針、
   コード実装方針〔インライン既定・POMはトリガー駆動〕）: [test-designs/README.md](test-designs/README.md)
-- Design Docテンプレート: [test-designs/templates/test-design-doc-template.md](test-designs/templates/test-design-doc-template.md)
+- Design Doc生成方法とテンプレート構成: [test-designs/README.md](test-designs/README.md#60-test-design-docの生成)
 - 完成例（PW Check）: [test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md](test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md) と [e2e/demo/E2E-DEMO-001.spec.ts](e2e/demo/E2E-DEMO-001.spec.ts)
 - 完成例（API Check）: [test-designs/int/demo/INT-DEMO-001-docs-availability.md](test-designs/int/demo/INT-DEMO-001-docs-availability.md) と [e2e/demo/INT-DEMO-001.spec.ts](e2e/demo/INT-DEMO-001.spec.ts)
 
@@ -121,14 +121,14 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 ```
 test-designs/
   README.md              … 管理ルール（ID命名規則、Status、Qualification、拡張・実装方針）
-  templates/             … Design Docテンプレート
+  templates/             … 共通部とmode別Checkの生成用テンプレート
   e2e/<area>/            … E2EレベルのDesign Doc
   int/<area>/            … IntegrationレベルのDesign Doc
 e2e/<area>/              … Playwright spec（INTも同じtestDir配下）
 skills/                  … 4 skillのhost中立な正本
 .claude/skills/          … 正本への相対symlink（Claude Code discovery）
 .agents/skills/          … 正本への相対symlink（Codex discovery）
-scripts/                 … 整合チェッカー等の運用スクリプト
+scripts/                 … Design Doc生成・整合チェッカー等の運用スクリプト
 .github/workflows/       … CI（check／typecheckは常時、E2Eはrepository variablesで有効化）
 playwright-report/       … 通常実行のHTMLレポート（Git管理外、実行ごとに上書き）
 qualification-reports/   … Qualificationのレポート（Git管理外、実行ごとに保存）

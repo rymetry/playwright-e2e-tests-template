@@ -121,7 +121,7 @@ shell commandもrepository rootをworking directoryとして実行する。
 
 - 本番originへのアクセス、allowlist外originでの操作継続
 - 固定wait／sleepを待機手段として記録すること
-- 座標依存の操作記録（COMPUTER_USEで不可避な場合の条件はテンプレート3.3を参照）
+- 座標依存の操作記録（COMPUTER_USEで不可避な場合の条件はREADME 5章を参照）
 - 生成コード・Locatorの無審査でのテストコード転記
 - 秘密情報をterminal・画面キャプチャ・ログ・Docへ出力・記録すること
 

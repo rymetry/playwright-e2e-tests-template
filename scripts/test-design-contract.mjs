@@ -26,6 +26,7 @@ const HTML_ENTITIES = new Map([
   ['apos', "'"],
   ['gt', '>'],
   ['lt', '<'],
+  ['nbsp', ' '],
   ['quot', '"'],
 ]);
 
@@ -48,8 +49,9 @@ export function normalizeContractToken(value) {
   let normalized = decodeHtmlEntities(value?.trim() ?? '');
   // 表示上の文字列を契約値として扱い、部分的なMarkdown装飾やlinkも除去する。
   normalized = normalized
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, '')
+    .replace(/!\[([^\]]*)\]\((?:[^()\\]|\\.|\([^()]*\))*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\((?:[^()\\]|\\.|\([^()]*\))*\)/g, '$1')
     .replace(/<\/?[A-Za-z][^>]*>/g, '')
     .replace(/[`*_~]/g, '')
     .trim();
@@ -61,8 +63,8 @@ export function containsContractPlaceholder(value) {
   return (
     normalized === '' ||
     NONE_REASON_PLACEHOLDERS.has(normalized) ||
-    /^(?:TBD|TODO)(?:\s*[:：].*)?$/.test(normalized) ||
-    /^(?:未実施|未記入|未定)(?:\s*[（(：:].*)?$/.test(normalized)
+    /^(?:TBD|TODO)(?=$|[\s:：。、,，.!！?？(（【\[])/.test(normalized) ||
+    /^(?:未実施|未記入|未定)(?=$|[\s:：。、,，.!！?？(（【\[]|です|でした|である|の)/.test(normalized)
   );
 }
 

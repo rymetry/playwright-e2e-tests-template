@@ -146,14 +146,14 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function blankExceptNewlines(value) {
-  return value.replace(/[^\n]/g, ' ');
+function preserveOnlyNewlines(value) {
+  return value.replace(/[^\n]/g, '');
 }
 
 function stripNonRenderedMarkdown(content) {
   const withoutComments = content.replace(
-    /<!--[\s\S]*?-->/g,
-    (comment) => blankExceptNewlines(comment),
+    /<!--[\s\S]*?(?:-->|$)/g,
+    (comment) => preserveOnlyNewlines(comment),
   );
   const lines = withoutComments.split('\n');
   let activeFence;
@@ -176,6 +176,25 @@ function stripNonRenderedMarkdown(content) {
     }
     return '';
   }).join('\n');
+}
+
+function extractCheckList(content) {
+  const lines = content.split('\n');
+  const headingIndex = lines.findIndex(
+    (line) => /^##\s+(?:\d+\.\s*)?Check一覧\s*$/.test(line),
+  );
+  if (headingIndex === -1) {
+    return '';
+  }
+
+  let endIndex = lines.length;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index] ?? '')) {
+      endIndex = index;
+      break;
+    }
+  }
+  return lines.slice(headingIndex + 1, endIndex).join('\n');
 }
 
 function extractCheckSections(content, checkId) {
@@ -286,13 +305,13 @@ function parseExplorationSummary(section) {
 
 export function parseDesignDocContent(filePath, content) {
   const renderedContent = stripNonRenderedMarkdown(content);
-  const lines = renderedContent.split('\n');
+  const checkListLines = extractCheckList(renderedContent).split('\n');
 
   const parentMatch = renderedContent.match(/\|\s*Parent Case ID\s*\|\s*([^|]+)\|/);
   const parentCaseId = parentMatch?.[1].trim();
 
   const checks = [];
-  for (const line of lines) {
+  for (const line of checkListLines) {
     // 表行「| a | b | ... |」をセル配列へ分解（両端の空要素を除去）
     const cells = line.split('|').map((cell) => cell.trim());
     if (cells.length < 8) {

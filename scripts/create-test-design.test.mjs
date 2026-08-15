@@ -230,9 +230,15 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
     '<strong>TBD</strong>',
     '_未定_',
     '[TODO](https://example.test/todo)',
+    '[TBD](https://example.test/path_(v1))',
+    '&nbsp;TBD&nbsp;',
+    'T<!-- -->BD',
     'TODO',
+    'TODO later',
+    'TODO（探索後に記入）',
     '未記入',
     '未定',
+    '未定です',
     'なし',
   ]) {
     assert.throws(
@@ -447,6 +453,38 @@ test('final公開後に異常終了したtransactionを完了扱いで回収す�
   );
   assert.equal(readFileSync(outputPath, 'utf8'), recoveredMarkdown);
   assert.deepEqual(readdirSync(dirname(transactionPath)), []);
+});
+
+test('pending削除後に残った一時ファイルを既存Doc判定時に回収する', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'test-design-composer-orphan-cleanup-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const input = {
+    ...BASE_INPUT,
+    slug: 'existing',
+    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+  };
+  const outputPath = join(
+    root,
+    'test-designs/e2e/demo/E2E-DEMO-002-existing.md',
+  );
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, composeTestDesign(input));
+  const transactionDirectory = dirname(pendingTransactionPath(root));
+  mkdirSync(transactionDirectory, { recursive: true });
+  writeFileSync(
+    join(transactionDirectory, `${BASE_INPUT.parentId}.orphan.json.tmp`),
+    '{"partial":',
+  );
+  writeFileSync(
+    join(transactionDirectory, `${BASE_INPUT.parentId}.orphan.md.tmp`),
+    'partial markdown',
+  );
+
+  assert.throws(
+    () => writeTestDesign({ ...input, slug: 'retry' }, root),
+    /E2E-DEMO-002-existing\.md/,
+  );
+  assert.deepEqual(readdirSync(transactionDirectory), []);
 });
 
 test('保留中生成を複数プロセスが同時回復してもDocは1件だけ公開する', async (t) => {

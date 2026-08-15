@@ -276,6 +276,14 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     '**T**B**D**',
     '[T](https://example.test/t)[B](https://example.test/b)[D](https://example.test/d)',
     '&#84;&#66;&#68;',
+    '&nbsp;TBD&nbsp;',
+    '[TBD](https://example.test/path_(v1))',
+    'T<!-- -->BD',
+    '未定です',
+    'TODO later',
+    'TODO（探索後に記入）',
+    '未定。',
+    'TODO。',
     '未記入',
     '未定',
     'なし',
@@ -384,6 +392,15 @@ test('部分装飾とHTML entityのplaceholderを表示値として拒否する'
     '**T**B**D**',
     '[T](https://example.test/t)[B](https://example.test/b)[D](https://example.test/d)',
     '&#84;&#66;&#68;',
+    '&nbsp;TBD&nbsp;',
+    '[TBD](https://example.test/path_(v1))',
+    'T<!-- -->BD',
+    '未実施です',
+    '未記入です',
+    'TODO later',
+    'TODO（探索後に記入）',
+    '未実施。',
+    'TODO。',
   ]) {
     await t.test(value, () => {
       const [check] = parseChecks([buildCheck({
@@ -414,7 +431,7 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
     explorationMode: 'PLAYWRIGHT_CLI',
     status: 'ACTIVE',
     summary: {
-      観測サマリ: '未定義値はnullとして返り、todo-list画面は正常に表示された',
+      観測サマリ: '未定義値はnullとして返り、TODOリスト画面は正常に表示された',
       '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
       Artifacts: 'run-001/artifacts/todo-list/result.png',
     },
@@ -541,6 +558,32 @@ test('code fenceとHTMLコメント内のCheck構造を解析対象にしない'
   assert.deepEqual(doc.checks.map((check) => check.id), ['E2E-TST-001-PW-01']);
   assert.deepEqual(doc.checkSectionIds, ['E2E-TST-001-PW-01']);
   assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
+});
+
+test('閉じていないHTMLコメント内のDoc構造を解析対象にしない', () => {
+  const hidden = buildDoc([buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  })]);
+  const doc = parseDesignDocContent(FILE_PATH, `<!--\n${hidden}`);
+
+  assert.equal(doc.parentCaseId, undefined);
+  assert.deepEqual(doc.checks, []);
+  assert.deepEqual(doc.checkSectionIds, []);
+});
+
+test('Check一覧節の外にあるCheck表行を一覧として扱わない', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const content = buildDoc([config]).replace('## 2. Check一覧', '## 2. 参考情報');
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.deepEqual(doc.checks, []);
+  assert.deepEqual(findOrphanCheckSectionIds(doc), ['E2E-TST-001-PW-01']);
 });
 
 test('Parent Case IDが異なるslugのDocで重複する場合を検出する', () => {

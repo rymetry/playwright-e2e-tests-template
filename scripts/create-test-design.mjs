@@ -457,8 +457,8 @@ function publishTransaction(root, transaction) {
       existingPath === transaction.outputPath &&
       readFileSync(existingPath, 'utf8') === transaction.markdown
     ) {
-      removePendingTransaction(root, transaction);
       cleanupTransactionTemporaryFiles(root, transaction.parentId);
+      removePendingTransaction(root, transaction);
       return existingPath;
     }
     throw existingParentError(transaction.parentId, existingPath);
@@ -487,8 +487,8 @@ function publishTransaction(root, transaction) {
   } finally {
     unlinkIfExists(stagedDocPath);
   }
-  removePendingTransaction(root, transaction);
   cleanupTransactionTemporaryFiles(root, transaction.parentId);
+  removePendingTransaction(root, transaction);
   return transaction.outputPath;
 }
 
@@ -532,6 +532,7 @@ export function writeTestDesign(input, root = ROOT) {
 
     const existingPath = findExistingParentDoc(outputDirectory, input.parentId);
     if (existingPath !== undefined) {
+      cleanupTransactionTemporaryFiles(root, input.parentId);
       throw existingParentError(input.parentId, existingPath);
     }
 

@@ -713,6 +713,61 @@ test('メタデータ節とTest Status判定根拠節は正確に1件だけ受�
 
     assert.equal(check.judgement, undefined);
   });
+
+  await t.test('装飾付きメタデータ節の重複', () => {
+    const config = buildCheck({
+      id: 'E2E-TST-001-PW-01',
+      checkMode: 'PW',
+      explorationMode: 'PLAYWRIGHT_CLI',
+    });
+    const content = buildDoc([config]).replace(
+      '\n\n## 2. Check一覧',
+      '\n\n## **メタデータ**\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-999 |\n\n## 2. Check一覧',
+    );
+
+    assert.equal(parseDesignDocContent(FILE_PATH, content).parentCaseId, undefined);
+  });
+
+  await t.test('装飾付きTest Status判定根拠節の重複', () => {
+    const config = buildCheck({
+      id: 'E2E-TST-001-PW-01',
+      checkMode: 'PW',
+      explorationMode: 'PLAYWRIGHT_CLI',
+    });
+    config.section += '\n\n#### **Test Status判定根拠**\n\n| 項目 | 値 |\n|---|---|\n| 判定 | ACTIVE |';
+    const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+    assert.equal(check.judgement, undefined);
+  });
+});
+
+test('装飾付き探索サマリ節の重複を拒否する', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'NONE',
+    status: 'ACTIVE',
+  });
+  config.section += '\n\n#### **探索サマリ**\n\n| 項目 | 値 |\n|---|---|\n| Exploration mode | `NONE` |';
+  const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+  assert.match(validateExplorationSummary(check).join('\n'), /「探索サマリ」は1件必要です/);
+});
+
+test('NONEの探索目的節が重複する場合を拒否する', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'NONE',
+    status: 'ACTIVE',
+  });
+  config.section = config.section.replace(
+    '\n\n#### 探索サマリ',
+    '\n\n#### 探索目的\n\n対象外（TBD）\n\n#### 探索サマリ',
+  );
+  const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+  assert.match(validateExplorationSummary(check).join('\n'), /「探索目的」は1件必要です/);
 });
 
 test('空行なしで始まるblockquoteをGFM表の終了として扱う', () => {

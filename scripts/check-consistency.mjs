@@ -178,11 +178,23 @@ function stripNonRenderedMarkdown(content) {
   }).join('\n');
 }
 
-function extractH2Sections(content, headingPattern) {
+function extractAtxHeadingText(line, level) {
+  const marker = '#'.repeat(level);
+  const match = line.match(
+    new RegExp(`^ {0,3}${marker}(?!#)[\\t ]+(.+?)[\\t ]*#*[\\t ]*$`),
+  );
+  return match?.[1];
+}
+
+function extractH2Sections(content, heading) {
   const lines = content.split('\n');
   const headingIndexes = [];
+  const expectedHeading = normalizeContractToken(heading);
   for (const [index, line] of lines.entries()) {
-    if (headingPattern.test(line)) {
+    const renderedHeading = extractAtxHeadingText(line, 2);
+    const normalizedHeading = normalizeContractToken(renderedHeading)
+      .replace(/^\d+\.\s*/, '');
+    if (normalizedHeading === expectedHeading) {
       headingIndexes.push(index);
     }
   }
@@ -190,7 +202,7 @@ function extractH2Sections(content, headingPattern) {
   return headingIndexes.map((headingIndex) => {
     let endIndex = lines.length;
     for (let index = headingIndex + 1; index < lines.length; index += 1) {
-      if (/^##\s/.test(lines[index] ?? '')) {
+      if (extractAtxHeadingText(lines[index] ?? '', 2) !== undefined) {
         endIndex = index;
         break;
       }
@@ -199,17 +211,17 @@ function extractH2Sections(content, headingPattern) {
   });
 }
 
-function extractH2Section(content, headingPattern) {
-  const sections = extractH2Sections(content, headingPattern);
+function extractH2Section(content, heading) {
+  const sections = extractH2Sections(content, heading);
   return sections.length === 1 ? sections[0] : '';
 }
 
 function extractCheckList(content) {
-  return extractH2Section(content, /^##\s+(?:\d+\.\s*)?Check一覧\s*$/);
+  return extractH2Section(content, 'Check一覧');
 }
 
 function extractMetadata(content) {
-  return extractH2Section(content, /^##\s+(?:\d+\.\s*)?メタデータ\s*$/);
+  return extractH2Section(content, 'メタデータ');
 }
 
 function extractCheckSections(content, checkId) {
@@ -252,8 +264,10 @@ function extractCheckSectionIds(content) {
 function extractSubsections(section, heading) {
   const lines = section.split('\n');
   const headingIndexes = [];
+  const expectedHeading = normalizeContractToken(heading);
   for (const [index, line] of lines.entries()) {
-    if (line.trim() === `#### ${heading}`) {
+    const renderedHeading = extractAtxHeadingText(line, 4);
+    if (normalizeContractToken(renderedHeading) === expectedHeading) {
       headingIndexes.push(index);
     }
   }
@@ -261,17 +275,13 @@ function extractSubsections(section, heading) {
   return headingIndexes.map((headingIndex) => {
     let endIndex = lines.length;
     for (let i = headingIndex + 1; i < lines.length; i += 1) {
-      if (/^####\s/.test(lines[i] ?? '')) {
+      if (extractAtxHeadingText(lines[i] ?? '', 4) !== undefined) {
         endIndex = i;
         break;
       }
     }
     return lines.slice(headingIndex + 1, endIndex).join('\n');
   });
-}
-
-function extractSubsection(section, heading) {
-  return extractSubsections(section, heading)[0];
 }
 
 function parseMarkdownTableRow(line) {
@@ -406,8 +416,9 @@ function extractSingletonKeyValue(table, expectedKey) {
 }
 
 function parseExplorationSummary(section) {
-  const headingCount = [...section.matchAll(/^#### 探索サマリ\s*$/gm)].length;
-  const body = extractSubsection(section, '探索サマリ');
+  const bodies = extractSubsections(section, '探索サマリ');
+  const headingCount = bodies.length;
+  const body = bodies[0];
   const fields = new Map();
   const duplicates = new Set();
   const unknownFields = new Set();
@@ -596,7 +607,11 @@ export function validateExplorationSummary(check) {
         );
       }
     }
-    const purpose = extractSubsection(check.section, '探索目的') ?? '';
+    const purposeSections = extractSubsections(check.section, '探索目的');
+    if (purposeSections.length !== 1) {
+      problems.push(`の「探索目的」は1件必要です（現在: ${purposeSections.length}件）`);
+    }
+    const purpose = purposeSections.length === 1 ? purposeSections[0] : '';
     const reason = purpose.match(/対象外（([^）]+)）/s)?.[1].trim();
     if (!isConcreteNoneReason(reason)) {
       problems.push('はExploration mode=NONEですが、「探索目的」に具体的な対象外理由がありません');

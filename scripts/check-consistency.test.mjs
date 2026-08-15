@@ -632,6 +632,51 @@ test('外側pipeを省略したメタデータ表とStatus判定表を受け入�
   assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
 });
 
+test('メタデータのParent Case IDは正確に1件だけ受け入れる', async (t) => {
+  for (const [name, extraRow] of [
+    ['重複key', '| Parent Case ID | E2E-TST-999 |'],
+    ['再掲header', '| 項目 | 値 |'],
+    ['再掲delimiter', '|---|---|'],
+  ]) {
+    await t.test(name, () => {
+      const config = buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+      });
+      const content = buildDoc([config]).replace(
+        '| Parent Case ID | E2E-TST-001 |',
+        `| Parent Case ID | E2E-TST-001 |\n${extraRow}`,
+      );
+
+      assert.equal(parseDesignDocContent(FILE_PATH, content).parentCaseId, undefined);
+    });
+  }
+});
+
+test('Test Status判定根拠の判定は正確に1件だけ受け入れる', async (t) => {
+  for (const [name, extraRow] of [
+    ['重複key', '| 判定 | ACTIVE |'],
+    ['再掲header', '| 項目 | 値 |'],
+    ['再掲delimiter', '|---|---|'],
+  ]) {
+    await t.test(name, () => {
+      const config = buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+      });
+      config.section = config.section.replace(
+        '| 判定 | DRAFT |',
+        `| 判定 | DRAFT |\n${extraRow}`,
+      );
+      const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+      assert.equal(check.judgement, undefined);
+    });
+  }
+});
+
 test('Check一覧の6列行をID形式にかかわらず検査対象へ残す', () => {
   const config = buildCheck({
     id: 'E2E-TST-001-PW-01',

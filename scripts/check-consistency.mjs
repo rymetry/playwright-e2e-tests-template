@@ -345,6 +345,17 @@ function parseStrictMarkdownTable(content, expectedHeader) {
   return { valid: true, rows };
 }
 
+function extractSingletonKeyValue(table, expectedKey) {
+  if (
+    !table.valid ||
+    table.rows.some(([key]) => key === '項目' || /^:?-{3,}:?$/.test(key))
+  ) {
+    return undefined;
+  }
+  const matchingRows = table.rows.filter(([key]) => key === expectedKey);
+  return matchingRows.length === 1 ? matchingRows[0][1].trim() : undefined;
+}
+
 function parseExplorationSummary(section) {
   const headingCount = [...section.matchAll(/^#### 探索サマリ\s*$/gm)].length;
   const body = extractSubsection(section, '探索サマリ');
@@ -384,9 +395,7 @@ export function parseDesignDocContent(filePath, content) {
     extractMetadata(renderedContent),
     ['項目', '値'],
   );
-  const parentCaseId = metadataTable.valid
-    ? metadataTable.rows.find(([key]) => key === 'Parent Case ID')?.[1].trim()
-    : undefined;
+  const parentCaseId = extractSingletonKeyValue(metadataTable, 'Parent Case ID');
 
   const checks = [];
   for (const cells of checkListTable.rows) {
@@ -466,9 +475,7 @@ function extractJudgement(section) {
     return undefined;
   }
   const table = parseStrictMarkdownTable(body, ['項目', '値']);
-  return table.valid
-    ? table.rows.find(([key]) => key === '判定')?.[1].trim()
-    : undefined;
+  return extractSingletonKeyValue(table, '判定');
 }
 
 export function validateExplorationSummary(check) {
@@ -667,7 +674,7 @@ function main() {
     const docPath = rel(doc.file);
 
     if (doc.parentCaseId === undefined) {
-      report(docPath, 'メタデータ表にParent Case IDが見つかりません');
+      report(docPath, 'メタデータ表に一意なParent Case IDが見つかりません');
       continue;
     }
 
@@ -730,7 +737,7 @@ function main() {
 
       // ルールNo.4: Check一覧のStatusと判定根拠表の判定の一致
       if (check.judgement === undefined) {
-        report(docPath, `「${check.id}」のTest Status判定根拠（| 判定 | 行）が見つかりません`);
+        report(docPath, `「${check.id}」のTest Status判定根拠に一意な「判定」行が見つかりません`);
       } else if (check.judgement !== check.status) {
         report(
           docPath,

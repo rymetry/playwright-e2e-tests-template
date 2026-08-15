@@ -63,7 +63,7 @@ repository固有workflowと `test-designs/README.md` を優先する。
 
 ## 検証コマンド
 
-- `npm run check` — Design Doc／spec整合と両hostのskill構造を検査
+- `npm run check` — Design Doc／spec整合、Design Docの契約・生成test、両hostのskill構造を検査
 - `npm run check:skills` — skill構造だけを検査
 - `npm run typecheck` — TypeScript型検査
 - `npm test` — 通常実行（QUARANTINE除外）

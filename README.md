@@ -47,8 +47,9 @@ cp .env.example .env
 | `npm run test:headed` | ブラウザ表示付き実行 |
 | `npm run test:ui` | UIモード |
 | `npm run test:report` | 直近のHTMLレポート表示 |
+| `npm run create:test-design -- ...` | [管理ガイド6.0](test-designs/README.md#60-test-design-docの生成)に従い、1シナリオ1ファイルのDesign Docを生成 |
 | `npm run typecheck` | TypeScript型検査 |
-| `npm run check` | Design Doc／spec整合と両hostのskill構造を検査 |
+| `npm run check` | Design Doc／spec整合、Design Docの契約・生成test、両hostのskill構造を検査 |
 | `npm run check:skills` | Claude Code／Codexのskill構造だけを検査 |
 
 - `test:qualify` は `--grep`（Check ID）と `--project` の指定を必須とし、
@@ -121,6 +122,7 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 ```
 test-designs/
   README.md              … 管理ルール（ID命名規則、Status、Qualification、拡張・実装方針）
+  areas.json             … generator／checkerが参照するAreaレジストリの正本
   templates/             … 共通部とmode別Checkの生成用テンプレート
   e2e/<area>/            … E2EレベルのDesign Doc
   int/<area>/            … IntegrationレベルのDesign Doc

@@ -245,12 +245,22 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
     '探索理由はTBDです',
     'Run ID: run-TBD',
     'Run ID: TODO-001',
+    'Run ID: TBD_001',
+    'Run ID: TODO_001',
+    'Run ID: TBD_PENDING',
+    'Run ID: TODO_PENDING',
+    'run-001/TBD_001/result.png',
+    'Run ID: TODO - 001',
     'TODO/screenshot.png',
     'Run ID: 未定-001',
     '未定/screenshot.png',
     'Run IDは未定の状態です',
     '完了条件は未定となっている',
     'TODO（探索後に記入）',
+    'TODO implement locator',
+    'TODO to implement after exploration',
+    'TODO 探索後に記入',
+    'TODO Locatorを実装',
     '未記入',
     '未定',
     '未定です',
@@ -273,6 +283,12 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
   );
   assert.doesNotThrow(
     () => check('API:REGRESSION:NONE:Todo APIは別の契約テストで保証されるため'),
+  );
+  assert.doesNotThrow(
+    () => check('PW:SMOKE:NONE:Todo after reloadは別シナリオで保証されるため'),
+  );
+  assert.doesNotThrow(
+    () => check('PW:SMOKE:NONE:Todo pending stateは別シナリオで保証されるため'),
   );
 });
 

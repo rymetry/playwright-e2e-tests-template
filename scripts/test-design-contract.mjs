@@ -130,19 +130,19 @@ function stripInlineLinkDestinations(value) {
 }
 
 function containsAsciiPlaceholder(value) {
-  const pattern = /(^|[^A-Z0-9_])(TBD|TODO)(?=$|[^A-Z0-9_])/g;
+  const pattern = /(^|[^A-Za-z0-9])(TBD|TODO)(?=$|[^A-Za-z])/gi;
   for (const match of value.matchAll(pattern)) {
     const markerStart = (match.index ?? 0) + match[1].length;
     const after = value.slice(markerStart + match[2].length).trimStart();
-    if (
-      match[2] === 'TBD' ||
-      after === '' ||
-      /^(?:です|でした|である|を|が|は|の(?:ため|まま)|[\s:：。、,，.!！?？(（【\[])/.test(after) ||
-      /^(?:\/|-\d)/.test(after) ||
-      /^(?:LATER|PENDING|PLACEHOLDER|AFTER|TO\s+BE)(?:$|[^A-Z0-9_])/i.test(after)
-    ) {
-      return true;
+    const marker = match[2];
+    if (marker.toUpperCase() === 'TODO') {
+      // 大文字のTODOだけを作業マーカーとして扱う。Title Case／lowercaseのTodoは
+      // product用語になりうるため許容し、既存の画面名「TODO List／TODO リスト」も除外する。
+      if (marker !== 'TODO' || /^(?:LIST(?:$|[^A-Za-z0-9])|リスト)/i.test(after)) {
+        continue;
+      }
     }
+    return true;
   }
   return false;
 }
@@ -153,7 +153,7 @@ function containsJapanesePlaceholder(value) {
     const after = value.slice(markerEnd).trimStart();
     if (
       after === '' ||
-      /^(?:です|でした|である|の(?:ため|まま|状態)|なので|[とに]なって|[-/]|[\s:：。、,，.!！?？(（【\[])/.test(after)
+      /^(?:です|でした|である|の(?:ため|まま|状態)|なので|[とに]なって|[-/_]|[\s:：。、,，.!！?？(（【\[])/.test(after)
     ) {
       return true;
     }
@@ -161,26 +161,34 @@ function containsJapanesePlaceholder(value) {
   return false;
 }
 
-export function normalizeContractToken(value) {
+function normalizeContractDisplay(value) {
   let normalized = decodeHtmlEntities(value?.trim() ?? '').normalize('NFKC');
   normalized = stripHtmlMarkup(normalized);
   // 表示上の文字列を契約値として扱い、Markdownのlink先や装飾を除去する。
   normalized = stripInlineLinkDestinations(normalized)
     .replace(/!?\[([^\]\n]*)\]\[[^\]\n]*\]/g, '$1')
     .replace(/!?\[([^\]\n]*)\]/g, '$1')
-    .replace(/[`*_~]/g, '')
+    .replace(/[`*~]/g, '')
+    // Markdown装飾のunderscoreだけを外し、ID内のunderscoreはmarker境界として保持する。
+    .replace(/(^|[^A-Za-z0-9])_+/g, '$1')
+    .replace(/_+(?=$|[^A-Za-z0-9])/g, '')
     .replace(/[\u0000\u200b-\u200d\u2060\ufeff]/g, '')
     .trim();
-  return normalized.replace(/\s+/g, ' ').toUpperCase();
+  return normalized.replace(/\s+/g, ' ');
+}
+
+export function normalizeContractToken(value) {
+  return normalizeContractDisplay(value).toUpperCase();
 }
 
 export function containsContractPlaceholder(value) {
-  const normalized = normalizeContractToken(value);
+  const displayValue = normalizeContractDisplay(value);
+  const normalized = displayValue.toUpperCase();
   return (
     normalized === '' ||
     NONE_REASON_PLACEHOLDERS.has(normalized) ||
-    containsAsciiPlaceholder(normalized) ||
-    containsJapanesePlaceholder(normalized)
+    containsAsciiPlaceholder(displayValue) ||
+    containsJapanesePlaceholder(displayValue)
   );
 }
 

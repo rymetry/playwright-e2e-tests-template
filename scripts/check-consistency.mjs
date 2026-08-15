@@ -267,13 +267,8 @@ function parseMarkdownTableRow(line) {
   }
 
   const trimmed = line.trim();
-  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
-    return undefined;
-  }
-
-  const cells = [];
-  let cellStart = 1;
-  for (let index = 1; index < trimmed.length - 1; index += 1) {
+  const delimiters = [];
+  for (let index = 0; index < trimmed.length; index += 1) {
     if (trimmed[index] !== '|') {
       continue;
     }
@@ -282,11 +277,26 @@ function parseMarkdownTableRow(line) {
       precedingBackslashes += 1;
     }
     if (precedingBackslashes % 2 === 0) {
-      cells.push(trimmed.slice(cellStart, index).trim());
-      cellStart = index + 1;
+      delimiters.push(index);
     }
   }
-  cells.push(trimmed.slice(cellStart, -1).trim());
+  if (delimiters.length === 0) {
+    return undefined;
+  }
+
+  const cells = [];
+  let cellStart = 0;
+  for (const delimiter of delimiters) {
+    cells.push(trimmed.slice(cellStart, delimiter).trim());
+    cellStart = delimiter + 1;
+  }
+  cells.push(trimmed.slice(cellStart).trim());
+  if (delimiters[0] === 0) {
+    cells.shift();
+  }
+  if (delimiters.at(-1) === trimmed.length - 1) {
+    cells.pop();
+  }
   return cells;
 }
 
@@ -328,6 +338,7 @@ function parseExplorationSummary(section) {
   const body = extractSubsection(section, '探索サマリ');
   const fields = new Map();
   const duplicates = new Set();
+  const unknownFields = new Set();
   let tableValid = false;
 
   if (body !== undefined) {
@@ -338,6 +349,10 @@ function parseExplorationSummary(section) {
       if (key === '項目' || /^-+$/.test(key)) {
         continue;
       }
+      if (!EXPLORATION_SUMMARY_FIELDS.includes(key)) {
+        unknownFields.add(key);
+        continue;
+      }
       if (fields.has(key)) {
         duplicates.add(key);
       } else {
@@ -346,7 +361,7 @@ function parseExplorationSummary(section) {
     }
   }
 
-  return { headingCount, fields, duplicates, tableValid };
+  return { headingCount, fields, duplicates, unknownFields, tableValid };
 }
 
 export function parseDesignDocContent(filePath, content) {
@@ -362,10 +377,6 @@ export function parseDesignDocContent(filePath, content) {
   const checks = [];
   for (const cells of checkListTable.rows) {
     const id = cells[0] ?? '';
-    if (!/^(E2E|INT)-/.test(id)) {
-      continue; // 先頭セルがCheck IDで始まらない行（ヘッダ等）は対象外
-    }
-
     const sections = extractCheckSections(renderedContent, id);
     const section = sections[0];
     checks.push({
@@ -482,6 +493,9 @@ export function validateExplorationSummary(check) {
   }
   for (const field of summary.duplicates) {
     problems.push(`の探索サマリ「${field}」行が重複しています`);
+  }
+  for (const field of summary.unknownFields) {
+    problems.push(`の探索サマリに定義外の「${field}」行があります`);
   }
 
   const summaryModeValue = summary.fields.get('Exploration mode');

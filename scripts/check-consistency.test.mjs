@@ -289,6 +289,12 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     '探索理由はTBDです',
     'Run ID: run-TBD',
     'Run ID: TODO-001',
+    'Run ID: TBD_001',
+    'Run ID: TODO_001',
+    'Run ID: TBD_PENDING',
+    'Run ID: TODO_PENDING',
+    'run-001/TBD_001/result.png',
+    'Run ID: TODO - 001',
     'TODO/screenshot.png',
     'Run ID: 未定-001',
     '未定/screenshot.png',
@@ -296,6 +302,10 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     '完了条件は未定となっている',
     '未定です',
     'TODO later',
+    'TODO implement locator',
+    'TODO to implement after exploration',
+    'TODO 探索後に記入',
+    'TODO Locatorを実装',
     'TODO（探索後に記入）',
     '未定。',
     'TODO。',
@@ -422,6 +432,12 @@ test('部分装飾とHTML entityのplaceholderを表示値として拒否する'
     'Run ID: run-TBD',
     'Run ID: TBD-001',
     'Run ID: TODO-001',
+    'Run ID: TBD_001',
+    'Run ID: TODO_001',
+    'Run ID: TBD_PENDING',
+    'Run ID: TODO_PENDING',
+    'run-001/TBD_001/result.png',
+    'Run ID: TODO - 001',
     'TODO/screenshot.png',
     'Run ID: 未定-001',
     '未定/screenshot.png',
@@ -435,6 +451,10 @@ test('部分装飾とHTML entityのplaceholderを表示値として拒否する'
     '未実施です',
     '未記入です',
     'TODO later',
+    'TODO implement locator',
+    'TODO to implement after exploration',
+    'TODO 探索後に記入',
+    'TODO Locatorを実装',
     'TODO（探索後に記入）',
     '未実施。',
     'TODO。',
@@ -469,7 +489,7 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
     status: 'ACTIVE',
     summary: {
       'Run / 観測環境': '未実施のジョブ件数は0だった / run-001 / 2026-08-15T10:00:00+09:00',
-      観測サマリ: 'Todo item was created。Todo API returned the reviewed response。TODO List screen is visible。未定義値はnullとして返り、TODO リスト画面も正常に表示された',
+      観測サマリ: 'Todo item was created。Todo API returned the reviewed response。Todo after reload remained visible。Todo pending count was 0。TODO List screen is visible。未定義値はnullとして返り、TODO リスト画面も正常に表示された',
       '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
       Artifacts: 'run-001/artifacts/todo-list/result.png',
     },
@@ -558,6 +578,48 @@ test('3スペースまでindentされたCheck一覧を受け入れる', () => {
 
   assert.equal(doc.checks.length, 1);
   assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
+});
+
+test('外側pipeを省略したGFMのCheck一覧を受け入れる', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const table = [
+    '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |',
+    '|---|---|---|---|---|---|',
+    config.row,
+  ].join('\n');
+  const withoutOuterPipes = table
+    .split('\n')
+    .map((line) => line.replace(/^\|\s?/, '').replace(/\s?\|$/, ''))
+    .join('\n');
+  const doc = parseDesignDocContent(FILE_PATH, buildDoc([config]).replace(
+    table,
+    withoutOuterPipes,
+  ));
+
+  assert.equal(doc.checks.length, 1);
+  assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
+});
+
+test('Check一覧の6列行をID形式にかかわらず検査対象へ残す', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const content = buildDoc([config]).replace(
+    config.row,
+    `${config.row}\n| invalid-check-id | PW | PLAYWRIGHT_CLI | REGRESSION | DRAFT | 未実装 |`,
+  );
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  assert.deepEqual(doc.checks.map((check) => check.id), [
+    'E2E-TST-001-PW-01',
+    'invalid-check-id',
+  ]);
 });
 
 test('Check一覧のCode列にescaped pipeを含む有効な6列表を受け入れる', () => {
@@ -672,6 +734,54 @@ test('探索サマリの値にescaped pipeを含む有効なMarkdown表を受け
       '実装候補（レビュー対象）': '`getByRole("button", { name: /Save\\|保存/ })`',
     },
   });
+});
+
+test('外側pipeを省略したGFMの探索サマリを受け入れる', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const values = defaultSummary('PLAYWRIGHT_CLI', 'DRAFT');
+  const table = `| 項目 | 値 |\n|---|---|\n${buildSummaryRows(values)}`;
+  const withoutOuterPipes = table
+    .split('\n')
+    .map((line) => line.replace(/^\|\s?/, '').replace(/\s?\|$/, ''))
+    .join('\n');
+  config.section = config.section.replace(table, withoutOuterPipes);
+  const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+  assert.deepEqual(validateExplorationSummary(check), []);
+});
+
+test('外側pipeのない探索サマリ行も重複として拒否する', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  config.section = config.section.replace(
+    '\n\n#### Test Status判定根拠',
+    '\nArtifacts | duplicate\n\n#### Test Status判定根拠',
+  );
+  const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+  assert.match(validateExplorationSummary(check).join('\n'), /「Artifacts」行が重複しています/);
+});
+
+test('探索サマリの定義外行を拒否する', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  config.section = config.section.replace(
+    '\n\n#### Test Status判定根拠',
+    '\n補足 | 定義外の行\n\n#### Test Status判定根拠',
+  );
+  const [check] = parseDesignDocContent(FILE_PATH, buildDoc([config])).checks;
+
+  assert.match(validateExplorationSummary(check).join('\n'), /定義外の「補足」行があります/);
 });
 
 test('複数Checkの探索サマリをそれぞれの節だけから読む', () => {

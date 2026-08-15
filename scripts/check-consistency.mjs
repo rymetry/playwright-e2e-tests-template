@@ -81,7 +81,7 @@ const INCOMPLETE_EXPLORATION_VALUES = new Set([
   'TBD',
   'TODO',
   '未定',
-]);
+].map(normalizeContractToken));
 const NONE_EXPLORATION_SUMMARY_VALUES = new Map([
   ['Run / 観測環境', 'なし（探索不要）'],
   ['観測サマリ', 'なし（探索不要）'],
@@ -282,9 +282,7 @@ function parseStrictMarkdownTable(content, expectedHeader) {
   if (headerIndex === -1) {
     return { valid: false, dataLines: [] };
   }
-  const delimiterIndex = lines.findIndex(
-    (line, index) => index > headerIndex && line.trim() !== '',
-  );
+  const delimiterIndex = headerIndex + 1;
   const header = parseMarkdownTableRow(lines[headerIndex] ?? '');
   const delimiter = parseMarkdownTableRow(lines[delimiterIndex] ?? '');
   const valid =
@@ -293,10 +291,18 @@ function parseStrictMarkdownTable(content, expectedHeader) {
     delimiter?.length === expectedHeader.length &&
     delimiter.every((cell) => /^:?-{3,}:?$/.test(cell));
 
-  return {
-    valid,
-    dataLines: valid ? lines.slice(delimiterIndex + 1) : [],
-  };
+  if (!valid) {
+    return { valid: false, dataLines: [] };
+  }
+
+  const dataLines = [];
+  for (const line of lines.slice(delimiterIndex + 1)) {
+    if (parseMarkdownTableRow(line) === undefined) {
+      break;
+    }
+    dataLines.push(line);
+  }
+  return { valid: true, dataLines };
 }
 
 function parseExplorationSummary(section) {

@@ -282,9 +282,14 @@ test('NONEの理由に既知のplaceholderを使用できない', async (t) => {
     '[TBD](https://example.test/path_(v1_(draft)))',
     '&emsp;TBD&emsp;',
     'T&#8203;BD',
+    'ＴＢＤ',
+    'T&NoBreak;BD',
     '<span title="1 > 0">TBD</span>',
     'T<!-- -->BD',
     '探索理由はTBDです',
+    'Run ID: run-TBD',
+    'Run IDは未定の状態です',
+    '完了条件は未定となっている',
     '未定です',
     'TODO later',
     'TODO（探索後に記入）',
@@ -404,11 +409,19 @@ test('部分装飾とHTML entityのplaceholderを表示値として拒否する'
     '[TBD](https://example.test/path_(v1_(draft)))',
     '&emsp;TBD&emsp;',
     'T&#8203;BD',
+    'ＴＢＤ',
+    'T&NoBreak;BD',
     '<span title="1 > 0">TBD</span>',
     'T<!-- -->BD',
+    'TBD/screenshot.png',
+    'artifacts/TBD/result.png',
+    'Run ID: run-TBD',
+    'Run ID: TBD-001',
     'Run ID: TBD',
     '観測結果 TBD later',
     '観測結果は未定です',
+    'Run IDは未定の状態です',
+    '完了条件は未定となっている',
     '反映先: TODO',
     'Artifacts: TBD',
     '未実施です',
@@ -448,7 +461,7 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
     status: 'ACTIVE',
     summary: {
       'Run / 観測環境': '未実施のジョブ件数は0だった / run-001 / 2026-08-15T10:00:00+09:00',
-      観測サマリ: '未定義値はnullとして返り、TODO リスト画面は正常に表示された',
+      観測サマリ: 'TODO List screen is visible。未定義値はnullとして返り、TODO リスト画面も正常に表示された',
       '実装候補（レビュー対象）': '反映済み（Assertion設計の未定義値ケース）',
       Artifacts: 'run-001/artifacts/todo-list/result.png',
     },
@@ -473,6 +486,20 @@ test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け�
     {
       name: 'delimiterなし',
       content: validContent.replace('|---|---|---|---|---|---|\n', ''),
+    },
+    {
+      name: 'headerとdelimiterの間に空行',
+      content: validContent.replace(
+        '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|',
+        '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n\n|---|---|---|---|---|---|',
+      ),
+    },
+    {
+      name: 'delimiterとデータ行の間に説明文',
+      content: validContent.replace(
+        `|---|---|---|---|---|---|\n${config.row}`,
+        `|---|---|---|---|---|---|\nこれは表の外にある説明です。\n${config.row}`,
+      ),
     },
     {
       name: '7列',
@@ -530,22 +557,39 @@ test('探索サマリは正規のheaderとdelimiterを持つ2列表だけを受�
       ),
     },
     {
+      name: 'headerとdelimiterの間に空行',
+      section: config.section.replace(
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
+        '#### 探索サマリ\n\n| 項目 | 値 |\n\n|---|---|\n',
+      ),
+    },
+    {
       name: '3列',
       section: config.section.replace(
         '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
         '#### 探索サマリ\n\n| 項目 | 値 | Extra |\n|---|---|---|\n',
       ),
     },
+    {
+      name: 'delimiterとデータ行の間に説明文',
+      section: config.section.replace(
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n',
+        '#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\nこれは表の外にある説明です。\n',
+      ),
+      missingRows: true,
+    },
   ];
 
-  for (const { name, section } of cases) {
+  for (const { name, section, missingRows = false } of cases) {
     await t.test(name, () => {
       const malformed = { ...config, section };
       const [check] = parseDesignDocContent(FILE_PATH, buildDoc([malformed])).checks;
-      assert.match(
-        validateExplorationSummary(check).join('\n'),
-        /探索サマリ表は「項目」「値」の2列とdelimiter行が必要です/,
-      );
+      const problems = validateExplorationSummary(check).join('\n');
+      if (missingRows) {
+        assert.match(problems, /探索サマリに「Exploration mode」行がありません/);
+      } else {
+        assert.match(problems, /探索サマリ表は「項目」「値」の2列とdelimiter行が必要です/);
+      }
     });
   }
 });

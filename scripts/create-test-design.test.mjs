@@ -236,11 +236,16 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
     '&nbsp;TBD&nbsp;',
     '&emsp;TBD&emsp;',
     'T&#8203;BD',
+    'ＴＢＤ',
+    'T&NoBreak;BD',
     '<span title="1 > 0">TBD</span>',
     'T<!-- -->BD',
     'TODO',
     'TODO later',
     '探索理由はTBDです',
+    'Run ID: run-TBD',
+    'Run IDは未定の状態です',
+    '完了条件は未定となっている',
     'TODO（探索後に記入）',
     '未記入',
     '未定',
@@ -255,6 +260,9 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
 
   assert.doesNotThrow(
     () => check('PW:SMOKE:NONE:TODO リスト画面は仕様上の対象外であるため'),
+  );
+  assert.doesNotThrow(
+    () => check('PW:SMOKE:NONE:TODO List画面は別の契約テストで保証されるため'),
   );
 });
 

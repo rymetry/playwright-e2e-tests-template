@@ -46,6 +46,26 @@ subdirectoryから起動してもよいが、Git管理外では開始しない�
 `references/test-generation.md` にある汎用plan／generate／healは使用せず、上記の
 repository固有workflowと `test-designs/README.md` を優先する。
 
+Test Design Docの記述は、
+[test-designs/README.md 1.1](test-designs/README.md#11-test-design-docの記述方針)
+の簡潔化方針に従う。運用ルールを本書へ複製せず、変更は正本へ行う。
+
+## コードコメント方針
+
+コードを新規作成・変更する場合は、処理の目的と流れが追えるよう、意味のある
+処理のまとまりごとに簡潔な日本語コメントを付ける。
+
+- 複数ステップの処理は、実行順が分かるコメントを付ける
+- 条件分岐、副作用、cleanup、例外処理は、目的や守る状態が分かりにくい場合に説明する
+- 関数・fixture・helperの役割が名前だけでは分かりにくい場合は、簡潔に説明する
+- コードを1行ずつ言い換えるだけのコメントや、明らかな処理への冗長なコメントは追加しない
+- コード変更時はコメントも更新し、実装と一致しないコメントを残さない
+- 認証情報、秘密値、個人情報をコメントへ記載しない
+
+Playwrightの`test()`本体では、利用者の操作と確認内容を`// 1. ...`のような短い
+ステップコメントで示す。fixtureのcleanupなど、テスト本体の外で重要な状態変更を
+行う場合も簡潔に説明する。完成例は`e2e/demo/E2E-DEMO-001.spec.ts`を参照する。
+
 ## skill構成の変更手順
 
 - **skillの追加・削除**: `skills/<name>/` の正本と、`.claude/skills/<name>`・

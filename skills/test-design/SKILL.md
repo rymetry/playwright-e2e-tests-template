@@ -16,10 +16,10 @@ shell commandもrepository rootをworking directoryとして実行する。
 
 ## 前提
 
-まず `test-designs/README.md` の命名規則（2章）・Status（4章）・共通の安全規則
-（5章）・運用フローとDoc生成方法（6章）を読み、従う。テンプレート部品を
-手作業でコピー・結合せず、`npm run create:test-design`で1シナリオ1ファイルの
-Design Docを生成する。
+まず `test-designs/README.md` の記述方針（1.1）・命名規則（2章）・Status（4章）・
+共通の安全規則（5章）・運用フローとDoc生成方法（6章）を読み、従う。
+テンプレート部品を手作業でコピー・結合せず、`npm run create:test-design`で
+1シナリオ1ファイルのDesign Docを生成する。
 
 入力の解釈:
 

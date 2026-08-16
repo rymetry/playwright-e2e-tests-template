@@ -216,11 +216,13 @@ test('owner-approved Qualificationは承認参照の欠落とplaceholderを拒�
     'TODO_PENDING',
     'PLACEHOLDER-001',
     'CHANGE_ME-001',
-    'AUTH-006-TODO',
-    'AUTH-006-TBD_001',
+    'REF-001-TODO',
+    'REF-123-TBD_001',
     'OWNER-PLACEHOLDER-001',
     'APPROVAL-EXAMPLE-123',
-    'AUTH-006-CHANGE_ME',
+    'REF-001-CHANGE_ME',
+    'REF-123-CHANGE--ME',
+    'REF-001-CHANGE__ME',
   ]) {
     assert.throws(
       () => resolveQualificationPolicy(ownerArgs, {
@@ -239,11 +241,11 @@ test('承認参照内の正当なplaceholder部分文字列は受け入れる', 
   );
   for (const ownerApprovalRef of [
     'TODOLIST-001',
-    'AUTH-TODOAPP-001',
+    'REF-TODOAPP-123',
     'TBDX-001',
-    'EXAMPLES-001',
+    'EXAMPLES-123',
     'SAMPLEAPP-001',
-    'CHANGE-METRIC-001',
+    'CHANGE-METRIC-123',
   ]) {
     assert.equal(
       resolveQualificationPolicy(ownerArgs, {

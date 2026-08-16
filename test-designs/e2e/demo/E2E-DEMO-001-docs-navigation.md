@@ -14,7 +14,7 @@ Qualificationの記録方法を実演しています。実プロジェクトで�
 | テストレベル | E2E |
 | 機能 | playwright.dev ドキュメントへの導線 |
 | 対象環境 | `E2E_BASE_URL=https://playwright.dev`（公開サイト） |
-| 最終確認 | 2026-07-29 / 本書「Test Status判定根拠」参照 |
+| 最終確認 | 2026-08-16 / 本書「Test Status判定根拠」参照 |
 
 ## Check一覧
 
@@ -148,13 +148,13 @@ Then:
 | 項目 | 値 |
 |---|---|
 | 判定 | ACTIVE |
-| 判定日 | 2026-07-29 |
-| 判定根拠 | URL Assertion厳格化とTierタグのtagオプション化（spec変更）に伴いREADME 4.2の再Qualificationを実施し、3回clean passした |
+| 判定日 | 2026-08-16 |
+| 判定根拠 | `chromium` Projectを通常版ChromiumのNew Headlessへ変更したためREADME 4.2の再Qualificationを実施し、3回clean passした |
 | Qualification command / procedure | `npm run test:qualify -- --grep "E2E-DEMO-001-PW-01" --project=chromium` |
 | Qualification result | 3 passed / 3 runs（retry・skip・fixme・flaky・interruptedなし） |
-| 実行条件 | origin `https://playwright.dev`、Playwright 1.62.0（同梱Chromium）、Project `chromium` |
-| 対象revision | `72f058c`（Qualification実行時のspec・configは本commitの内容と同一） |
-| 証跡 | 本表の記録が一次証跡。補助: `qualification-reports/2026-07-29_12-19-21-234_E2E-DEMO-001-PW-01/`（2026-07-29 21:19 JST実行。フォルダ名はUTC、ローカル限定で消失しうる） |
+| 実行条件 | origin `https://playwright.dev`、Playwright 1.62.0、Project `chromium`（`channel: 'chromium'`） |
+| 対象revision | `3e904f5`（Qualification実行時のspec・configは本commitの内容と同一） |
+| 証跡 | 本表の記録が一次証跡。補助: `qualification-reports/2026-08-16_14-50-16-595_E2E-DEMO-001-PW-01/`（2026-08-16 23:50 JST実行。フォルダ名はUTC、ローカル限定で消失しうる） |
 
 #### 対象外・未確定
 

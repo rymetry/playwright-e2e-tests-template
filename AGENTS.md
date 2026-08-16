@@ -92,5 +92,6 @@ Playwrightの`test()`本体では、利用者の操作と確認内容を`// 1. .
 
 - `E2E_ALLOWED_ORIGINS` にないoriginへアクセスしない。本番環境を対象にしない
 - 探索・live UIの観測事実を無審査で期待値にしない。期待値の確定は人間のレビュー
-- 認証情報の値を読まない・出力しない・記録しない（シェルの環境変数展開でのみ使用）
+- 認証情報の値を読まない・terminal、ログ、Docへ直接出力しない。環境変数から
+  入力先へ直接渡し、失敗時artifactは`test-designs/README.md` 5章の取扱いに従う
 - 固定wait／sleep、skip、不安定なCSS／XPathをテストへ持ち込まない

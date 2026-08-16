@@ -42,6 +42,16 @@ Google Chrome／Microsoft EdgeのProjectには、この設定は適用されな�
 `E2E_BASE_URL` のoriginが `E2E_ALLOWED_ORIGINS` に含まれない場合、テストは
 起動時に失敗する（本番環境への誤実行防止）。
 
+### 認証情報と失敗時artifact
+
+AIは認証情報の値を読み取らず、`.env`の環境変数から入力先へ直接渡す。値を
+terminal、ログ、Test Design Docへ直接出力しない。
+
+認証情報を含み得る失敗時のtrace、screenshot等は、本番以外の許可済み検証環境で
+テスト専用アカウントを使うテストに限定する。Git管理外の実行環境内だけに保存し、
+外部へ共有しない。調査完了後に不要であることを管理者が確認し、手動で削除する。詳細は
+[test-designs/README.md 5章](test-designs/README.md#5-共通の安全規則)を参照する。
+
 ## スクリプト
 
 | コマンド | 用途 |

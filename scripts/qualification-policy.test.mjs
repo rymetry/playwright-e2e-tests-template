@@ -216,6 +216,11 @@ test('owner-approved Qualificationは承認参照の欠落とplaceholderを拒�
     'TODO_PENDING',
     'PLACEHOLDER-001',
     'CHANGE_ME-001',
+    'AUTH-006-TODO',
+    'AUTH-006-TBD_001',
+    'OWNER-PLACEHOLDER-001',
+    'APPROVAL-EXAMPLE-123',
+    'AUTH-006-CHANGE_ME',
   ]) {
     assert.throws(
       () => resolveQualificationPolicy(ownerArgs, {
@@ -224,6 +229,29 @@ test('owner-approved Qualificationは承認参照の欠落とplaceholderを拒�
         E2E_QUALIFY_OWNER_APPROVAL_REF: ownerApprovalRef,
       }),
       /E2E_QUALIFY_OWNER_APPROVAL_REF/,
+    );
+  }
+});
+
+test('承認参照内の正当なplaceholder部分文字列は受け入れる', () => {
+  const ownerArgs = standardArgs.map(
+    (arg) => arg === '--repeat-each=3' ? '--repeat-each=1' : arg,
+  );
+  for (const ownerApprovalRef of [
+    'TODOLIST-001',
+    'AUTH-TODOAPP-001',
+    'TBDX-001',
+    'EXAMPLES-001',
+    'SAMPLEAPP-001',
+    'CHANGE-METRIC-001',
+  ]) {
+    assert.equal(
+      resolveQualificationPolicy(ownerArgs, {
+        E2E_QUALIFY: '1',
+        E2E_QUALIFY_MODE: 'owner-approved',
+        E2E_QUALIFY_OWNER_APPROVAL_REF: ownerApprovalRef,
+      })?.ownerApprovalRef,
+      ownerApprovalRef,
     );
   }
 });

@@ -149,12 +149,28 @@ DRAFT → EVALUATING → ACTIVE ⇄ QUARANTINE → RETIRED
   ```
 
   `test:qualify`は3回実行・retry 0・workers 1を標準条件として設定し、
-  `--grep`（Check ID）と`--project`の指定漏れを起動時に検証する
-  （未指定の場合はテストを開始せず失敗する）。このガードは誤操作防止を
-  目的とし、追加CLI引数による意図的な条件変更は防止対象外とする。
+  `--grep`（単一のCheck IDとの完全一致）と`--project`をそれぞれ1回だけ必須とする。
+  repeat、retry、workersもaliasと重複指定を含めて1回だけ許可し、scriptの規定値から
+  変更した場合はテスト開始前に失敗する。これらとPlaywrightの`test` subcommand以外の
+  CLI引数はQualificationで使用できない。
   Qualificationの妥当性は、Design Docに記録した実行コマンド、
   3 passed / 3 runsの結果、対象revision、およびレビューで確認する。
-- clean passの定義: 3回すべてpassedであり、retry、skip、fixme、
+- 誤入力、課金、副作用、外部サービス制限などにより3回実行自体が品質リスクを
+  増やすCheckは、**オーナーが実行前に1回への短縮を承認した場合だけ**、次の
+  owner-approved Qualificationを使用できる。
+
+  ```bash
+  E2E_QUALIFY_OWNER_APPROVAL_REF=<承認記録の識別子> \
+    npm run test:qualify:owner-approved -- \
+    --grep "<Check ID>" --project=<Project>
+  ```
+
+  `test:qualify:owner-approved`は1回実行・retry 0・workers 1を固定し、
+  `E2E_QUALIFY_OWNER_APPROVAL_REF`が未設定、不正、またはplaceholderの場合は
+  テスト開始前に失敗する。承認記録の識別子、承認者、承認日、短縮理由、承認回数、
+  実行コマンド、1 passed / 1 runの結果を対象Checkの「Test Status判定根拠」へ
+  記録する。承認は対象Checkだけに有効で、他のCheckや再Qualificationへ継承しない。
+- clean passの定義: 規定回数のすべてがpassedであり、retry、skip、fixme、
   expected failure、flaky、interruptedを1件も含まない
 - **一次証跡はDesign Docの「Test Status判定根拠」表のテキスト記録**とする。
   実行コマンド、Check IDとProject、結果、対象revision（commit等。未管理なら
@@ -166,8 +182,8 @@ DRAFT → EVALUATING → ACTIVE ⇄ QUARANTINE → RETIRED
   `npx playwright show-report qualification-reports/<dir>`で行う。
   Status判定と一次証跡の記録が完了するまでは削除せず、完了後は継続調査に
   不要であることを管理者が確認して手動削除してよい
-- `test:qualify`はPOSIX形式の環境変数設定を使うため、macOS／Linuxを前提と
-  する（Windowsでは`cross-env`等が必要）
+- Qualification scriptはPOSIX形式の環境変数設定を使うため、macOS／Linuxを
+  前提とする（Windowsでは`cross-env`等が必要）
 
 **CU Check:**
 

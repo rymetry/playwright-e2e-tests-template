@@ -44,6 +44,7 @@ cp .env.example .env
 | `npm test` | 全テスト実行（QUARANTINE除外） |
 | `npm run test:smoke` | SMOKE Tierのみ実行（QUARANTINE除外） |
 | `npm run test:qualify -- --grep "<Check ID>" --project=chromium` | Check単位のQualification（3回連続実行） |
+| `E2E_QUALIFY_OWNER_APPROVAL_REF=<ref> npm run test:qualify:owner-approved -- --grep "<Check ID>" --project=chromium` | オーナー承認を記録したCheck単位の短縮Qualification（1回実行） |
 | `npm run test:headed` | ブラウザ表示付き実行 |
 | `npm run test:ui` | UIモード |
 | `npm run test:report` | 直近のHTMLレポート表示 |
@@ -52,9 +53,14 @@ cp .env.example .env
 | `npm run check` | Design Doc／spec整合、Design Docの契約・生成test、両hostのskill構造を検査 |
 | `npm run check:skills` | Claude Code／Codexのskill構造だけを検査 |
 
-- `test:qualify` は `--grep`（Check ID）と `--project` の指定を必須とし、
+- `test:qualify` と `test:qualify:owner-approved` は `--grep`（Check ID）と
+  `--project` の指定を必須とし、
   未指定の場合は起動時に失敗する。レポートは `qualification-reports/<実行日時>_<Check ID>/`
   （Git管理外）へ保存され、`npx playwright show-report qualification-reports/<dir>` で閲覧できる
+- 短縮Qualificationは、Test Design Docへオーナー承認を記録した後だけ使用する。
+  `E2E_QUALIFY_OWNER_APPROVAL_REF`にはその記録を識別する非placeholder値を指定する
+- Qualificationでは、`test` subcommand、単一Check ID、単一Project、規定の
+  repeat／retry／workers以外のCLI引数を使用できない
 - Check ID／Area単位の絞り込み実行は `npm test -- --grep "E2E-AUTH-"` のように
   `npm test` 経由で行う。`npx playwright test` の直接実行ではQUARANTINE除外が
   適用されない

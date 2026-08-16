@@ -1,7 +1,7 @@
 const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API)-\d{2}$/;
 const OWNER_APPROVAL_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/;
 const PLACEHOLDER_APPROVAL_REF_PATTERN =
-  /^(?:TBD|TODO|UNSET|NONE|PLACEHOLDER|EXAMPLE|SAMPLE|CHANGE[._:-]?ME)(?:$|[._:-]|\d)/i;
+  /(?:^|[._:-])(?:TBD|TODO|UNSET|NONE|PLACEHOLDER|EXAMPLE|SAMPLE|CHANGE[._:-]*ME)(?=$|[._:-]|\d)/i;
 const ARG_OPTIONS = [
   { key: 'grep', names: ['--grep', '-g'] },
   { key: 'project', names: ['--project'] },

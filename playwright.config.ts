@@ -5,6 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  * https://github.com/motdotla/dotenv
  */
 import dotenv from 'dotenv';
+import { resolveQualificationPolicy } from './scripts/qualification-policy.mjs';
 dotenv.config({ path: new URL('.env', import.meta.url) });
 
 /**
@@ -47,60 +48,28 @@ function validateBaseUrl(baseUrl: string | undefined): string | undefined {
 }
 
 /**
- * Qualification実行（E2E_QUALIFY=1、test:qualify経由）の制御。
+ * Qualification実行（E2E_QUALIFY=1、test:qualifyまたは
+ * test:qualify:owner-approved経由）の制御。
  * - 対象を1 Checkに限定するため、--grep（Check ID）と--projectの指定を必須とし、
  *   未指定の場合はテスト開始前に失敗する
+ * - 標準3回またはオーナー承認済み1回のprofile条件を検証する
  * - HTMLレポートを上書きされないqualification-reports/配下へ保存する
  * （test-designs/README.md 4.1章）
  */
-const CHECK_ID_PATTERN = /(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API)-\d{2}/;
-
-function findArgValue(args: readonly string[], name: string): string | undefined {
-  const index = args.findIndex((arg) => arg === name || arg.startsWith(`${name}=`));
-  if (index === -1) {
-    return undefined;
-  }
-
-  const arg = args[index];
-  if (arg === undefined) {
-    return undefined;
-  }
-
-  if (arg.includes('=')) {
-    return arg.slice(arg.indexOf('=') + 1);
-  }
-
-  return args[index + 1];
-}
-
 function resolveQualifyReportDir(): string | undefined {
   if (process.env.E2E_QUALIFY !== '1') {
     return undefined;
   }
 
-  // worker processはCLI引数を持たない別プロセスとしてconfigを再評価するため、
-  // 検証とレポート設定は主プロセスでのみ行う（レポーターは主プロセスだけが使う）
-  if (process.env.TEST_WORKER_INDEX !== undefined) {
+  const policy = resolveQualificationPolicy(process.argv.slice(2), process.env);
+  if (policy === undefined) {
     return undefined;
   }
-
-  const args = process.argv.slice(2);
-  const grep = findArgValue(args, '--grep') ?? findArgValue(args, '-g');
-  const project = findArgValue(args, '--project');
-
-  const checkId = grep?.match(CHECK_ID_PATTERN)?.[0];
-  if (checkId === undefined) {
-    throw new Error(
-      'Qualificationには --grep "<Check ID>" の指定が必要です' +
-        '（例: --grep "E2E-DEMO-001-PW-01"）。'
-    );
-  }
-
-  if (project === undefined || project === '') {
-    throw new Error(
-      'Qualificationには --project の指定が必要です（例: --project=chromium）。'
-    );
-  }
+  const { checkId, mode, runCount, ownerApprovalRef } = policy;
+  console.log(
+    `Qualification profile: ${mode}; runs: ${runCount}` +
+      (ownerApprovalRef === undefined ? '' : `; owner approval ref: ${ownerApprovalRef}`),
+  );
 
   // ミリ秒まで含め、同一秒内の実行によるフォルダ名衝突の可能性を低減する
   const timestamp = new Date()

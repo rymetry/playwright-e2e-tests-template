@@ -1,6 +1,15 @@
 const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API)-\d{2}$/;
 const OWNER_APPROVAL_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/;
-const PLACEHOLDER_APPROVAL_REFS = new Set(['TBD', 'TODO', 'UNSET', 'NONE']);
+const PLACEHOLDER_APPROVAL_REFS = new Set([
+  'TBD',
+  'TODO',
+  'UNSET',
+  'NONE',
+  'PLACEHOLDER',
+  'CHANGEME',
+  'EXAMPLE',
+  'SAMPLE',
+]);
 const ARG_OPTIONS = [
   { key: 'grep', names: ['--grep', '-g'] },
   { key: 'project', names: ['--project'] },
@@ -11,7 +20,7 @@ const ARG_OPTIONS = [
 
 function parseQualificationArgs(args) {
   const parsed = new Map(ARG_OPTIONS.map(({ key }) => [key, []]));
-  let index = args[0] === 'test' ? 1 : 0;
+  let index = 1;
   while (index < args.length) {
     const arg = args[index];
     if (arg === undefined) {
@@ -77,6 +86,12 @@ export function resolveQualificationPolicy(args, env) {
     return undefined;
   }
 
+  // Playwright workerはCLI引数を持たない別プロセスとしてconfigを再評価する。
+  // user-controlledなTEST_WORKER_INDEXではなく、主プロセス固有のsubcommandで判別する。
+  if (args[0] !== 'test') {
+    return undefined;
+  }
+
   const parsed = parseQualificationArgs(args);
   const grep = requireSingleArgValue(parsed, 'grep', '--grep "<Check ID>"');
   const project = requireSingleArgValue(parsed, 'project', '--project');
@@ -104,7 +119,9 @@ export function resolveQualificationPolicy(args, env) {
     if (
       ownerApprovalRef === undefined ||
       !OWNER_APPROVAL_REF_PATTERN.test(ownerApprovalRef) ||
-      PLACEHOLDER_APPROVAL_REFS.has(ownerApprovalRef.toUpperCase())
+      PLACEHOLDER_APPROVAL_REFS.has(
+        ownerApprovalRef.toUpperCase().replace(/[._:-]/g, ''),
+      )
     ) {
       throw new Error(
         'owner-approved Qualificationには、記録済み承認を指す' +

@@ -203,8 +203,14 @@ ACTIVEのCheckでも、次のいずれかが変わった場合はEVALUATINGへ�
 Qualificationを再実施する。
 
 - spec実装、操作手順、またはレビュー済みの期待値
-- Playwright設定、Project、browser／toolのmajor version
+- Checkの操作、assertion、実行結果へ影響するPlaywright設定、Project、
+  browser／toolのmajor version
 - 対象環境（origin、主要データ、権限構成）
+
+Qualification profile、引数guard、reporter、report保存先など、Checkの操作、
+assertion、実行結果に影響しない運用設定だけの変更は、既存ACTIVE Checkの
+実行証跡を無効化しないため、再Qualificationの対象外とする。これらの運用実装は
+対応する自動testとrepository checkで検証する。
 
 ### 4.3 QUARANTINEの実行除外と復帰
 

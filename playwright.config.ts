@@ -61,12 +61,6 @@ function resolveQualifyReportDir(): string | undefined {
     return undefined;
   }
 
-  // worker processはCLI引数を持たない別プロセスとしてconfigを再評価するため、
-  // 検証とレポート設定は主プロセスでのみ行う（レポーターは主プロセスだけが使う）
-  if (process.env.TEST_WORKER_INDEX !== undefined) {
-    return undefined;
-  }
-
   const policy = resolveQualificationPolicy(process.argv.slice(2), process.env);
   if (policy === undefined) {
     return undefined;

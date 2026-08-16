@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { resolveQualificationPolicy } from './qualification-policy.mjs';
 
@@ -12,9 +14,14 @@ const standardArgs = [
   'E2E-DEMO-001-PW-01',
   '--project=chromium',
 ];
+const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
 test('Qualification以外ではpolicyを適用しない', () => {
   assert.equal(resolveQualificationPolicy([], {}), undefined);
+  assert.equal(
+    resolveQualificationPolicy(['worker-process'], { E2E_QUALIFY: '1' }),
+    undefined,
+  );
 });
 
 test('標準Qualificationは3回・retry 0・workers 1を受け入れる', () => {
@@ -30,6 +37,52 @@ test('標準Qualificationは3回・retry 0・workers 1を受け入れる', () =>
       runCount: 3,
       ownerApprovalRef: undefined,
     },
+  );
+});
+
+test('外部のTEST_WORKER_INDEX設定では標準Qualification検証を迂回しない', () => {
+  assert.equal(
+    resolveQualificationPolicy(standardArgs, {
+      E2E_QUALIFY: '1',
+      E2E_QUALIFY_MODE: 'standard',
+      TEST_WORKER_INDEX: '0',
+    })?.runCount,
+    3,
+  );
+  assert.throws(
+    () => resolveQualificationPolicy([...standardArgs, '--repeat-each=1'], {
+      E2E_QUALIFY: '1',
+      E2E_QUALIFY_MODE: 'standard',
+      TEST_WORKER_INDEX: '0',
+    }),
+    /指定が1回だけ必要/,
+  );
+});
+
+test('実CLIでも外部のTEST_WORKER_INDEX設定によるpolicy迂回を拒否する', () => {
+  const result = spawnSync(
+    'npm',
+    [
+      'run',
+      'test:qualify',
+      '--',
+      '--grep',
+      'E2E-DEMO-001-PW-01',
+      '--project=chromium',
+      '--repeat-each=1',
+      '--list',
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      env: { ...process.env, TEST_WORKER_INDEX: '0' },
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    `${result.stdout}${result.stderr}`,
+    /Qualificationでは引数「--list」を使用できません/,
   );
 });
 
@@ -149,7 +202,16 @@ test('owner-approved Qualificationは承認参照の欠落とplaceholderを拒�
   const ownerArgs = standardArgs.map(
     (arg) => arg === '--repeat-each=3' ? '--repeat-each=1' : arg,
   );
-  for (const ownerApprovalRef of [undefined, '', 'TODO']) {
+  for (const ownerApprovalRef of [
+    undefined,
+    '',
+    'TODO',
+    'placeholder',
+    'CHANGE_ME',
+    'change-me',
+    'EXAMPLE',
+    'sample',
+  ]) {
     assert.throws(
       () => resolveQualificationPolicy(ownerArgs, {
         E2E_QUALIFY: '1',

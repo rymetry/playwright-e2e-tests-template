@@ -46,6 +46,10 @@ subdirectoryから起動してもよいが、Git管理外では開始しない�
 `references/test-generation.md` にある汎用plan／generate／healは使用せず、上記の
 repository固有workflowと `test-designs/README.md` を優先する。
 
+Test Design Docの記述は、
+[test-designs/README.md 1.1](test-designs/README.md#11-test-design-docの記述方針)
+の簡潔化方針に従う。運用ルールを本書へ複製せず、変更は正本へ行う。
+
 ## skill構成の変更手順
 
 - **skillの追加・削除**: `skills/<name>/` の正本と、`.claude/skills/<name>`・

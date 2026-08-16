@@ -211,6 +211,11 @@ test('owner-approved Qualificationは承認参照の欠落とplaceholderを拒�
     'change-me',
     'EXAMPLE',
     'sample',
+    'TODO-001',
+    'TBD_001',
+    'TODO_PENDING',
+    'PLACEHOLDER-001',
+    'CHANGE_ME-001',
   ]) {
     assert.throws(
       () => resolveQualificationPolicy(ownerArgs, {

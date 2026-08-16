@@ -1,15 +1,7 @@
 const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API)-\d{2}$/;
 const OWNER_APPROVAL_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/;
-const PLACEHOLDER_APPROVAL_REFS = new Set([
-  'TBD',
-  'TODO',
-  'UNSET',
-  'NONE',
-  'PLACEHOLDER',
-  'CHANGEME',
-  'EXAMPLE',
-  'SAMPLE',
-]);
+const PLACEHOLDER_APPROVAL_REF_PATTERN =
+  /^(?:TBD|TODO|UNSET|NONE|PLACEHOLDER|EXAMPLE|SAMPLE|CHANGE[._:-]?ME)(?:$|[._:-]|\d)/i;
 const ARG_OPTIONS = [
   { key: 'grep', names: ['--grep', '-g'] },
   { key: 'project', names: ['--project'] },
@@ -119,9 +111,7 @@ export function resolveQualificationPolicy(args, env) {
     if (
       ownerApprovalRef === undefined ||
       !OWNER_APPROVAL_REF_PATTERN.test(ownerApprovalRef) ||
-      PLACEHOLDER_APPROVAL_REFS.has(
-        ownerApprovalRef.toUpperCase().replace(/[._:-]/g, ''),
-      )
+      PLACEHOLDER_APPROVAL_REF_PATTERN.test(ownerApprovalRef)
     ) {
       throw new Error(
         'owner-approved Qualificationには、記録済み承認を指す' +

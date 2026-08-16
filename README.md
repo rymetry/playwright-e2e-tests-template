@@ -33,6 +33,11 @@ npx playwright install chromium
 cp .env.example .env
 ```
 
+`chromium` Projectは `channel: 'chromium'` を既定とし、通常版Chromiumの
+New Headlessを使用する。これにより、ブラウザ表示あり／なしで異なる実行ファイルを
+使うことによる挙動差を抑える。Firefox／WebKitや、明示的に追加する
+Google Chrome／Microsoft EdgeのProjectには、この設定は適用されない。
+
 `.env` の `E2E_BASE_URL` と `E2E_ALLOWED_ORIGINS` を対象環境に合わせて設定する。
 `E2E_BASE_URL` のoriginが `E2E_ALLOWED_ORIGINS` に含まれない場合、テストは
 起動時に失敗する（本番環境への誤実行防止）。

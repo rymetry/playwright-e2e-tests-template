@@ -123,7 +123,8 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      /* headed／headlessで通常版Chromiumを共用し、Headless Shell固有の挙動差を避ける */
+      use: { ...devices['Desktop Chrome'], channel: 'chromium' },
     },
 
     // {

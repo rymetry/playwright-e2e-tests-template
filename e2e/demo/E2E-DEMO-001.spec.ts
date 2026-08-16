@@ -9,14 +9,14 @@ test(
   'E2E-DEMO-001-PW-01: トップページからGet startedでインストールガイドへ到達できる',
   { tag: '@smoke' },
   async ({ page }) => {
-    // Given: トップページを表示している
+    // 1. トップページを表示する
     await page.goto('/');
     await expect(page).toHaveTitle(/Playwright/);
 
-    // When: Get startedリンクからドキュメントへ遷移する
+    // 2. Get startedリンクからドキュメントへ遷移する
     await page.getByRole('link', { name: 'Get started' }).click();
 
-    // Then: インストールガイドが表示される
+    // 3. インストールガイドが表示されたことを確認する
     await expect(page).toHaveURL(/\/docs\/intro$/);
     await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
   }

@@ -20,7 +20,7 @@ Qualificationの記録方法を実演しています。実プロジェクトで�
 
 | Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |
 |---|---|---|---|---|---|
-| E2E-DEMO-001-PW-01 | PLAYWRIGHT | `NONE` | SMOKE | EVALUATING | `e2e/demo/E2E-DEMO-001.spec.ts` |
+| E2E-DEMO-001-PW-01 | PLAYWRIGHT | `NONE` | SMOKE | ACTIVE | `e2e/demo/E2E-DEMO-001.spec.ts` |
 
 Status列は各Checkの「Test Status判定根拠」の判定と常に一致させる。
 
@@ -147,14 +147,14 @@ Then:
 
 | 項目 | 値 |
 |---|---|
-| 判定 | EVALUATING |
+| 判定 | ACTIVE |
 | 判定日 | 2026-08-16 |
-| 判定根拠 | `chromium` Projectの実行ブラウザを通常版ChromiumのNew Headlessへ変更したため、README 4.2に従い再Qualification対象とした |
+| 判定根拠 | `chromium` Projectを通常版ChromiumのNew Headlessへ変更したためREADME 4.2の再Qualificationを実施し、3回clean passした |
 | Qualification command / procedure | `npm run test:qualify -- --grep "E2E-DEMO-001-PW-01" --project=chromium` |
-| Qualification result | 再Qualification実施前 |
+| Qualification result | 3 passed / 3 runs（retry・skip・fixme・flaky・interruptedなし） |
 | 実行条件 | origin `https://playwright.dev`、Playwright 1.62.0、Project `chromium`（`channel: 'chromium'`） |
-| 対象revision | 本判定を記録したrevision |
-| 証跡 | 再Qualification完了後に本表へ記録する |
+| 対象revision | `3e904f5`（Qualification実行時のspec・configは本commitの内容と同一） |
+| 証跡 | 本表の記録が一次証跡。補助: `qualification-reports/2026-08-16_14-50-16-595_E2E-DEMO-001-PW-01/`（2026-08-16 23:50 JST実行。フォルダ名はUTC、ローカル限定で消失しうる） |
 
 #### 対象外・未確定
 

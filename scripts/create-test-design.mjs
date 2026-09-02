@@ -18,17 +18,20 @@ import { fileURLToPath } from 'node:url';
 
 import {
   EXECUTION_MODE_BY_CHECK_MODE,
+  formatCheckListHeader,
   isConcreteNoneReason,
   parseAreaRegistryContent,
+  VALID_CASE_CLASSES,
   VALID_EXPLORATION_MODES_BY_CHECK_MODE,
+  VALID_TIERS,
 } from './test-design-contract.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_TEMPLATE_ROOT = join(ROOT, 'test-designs', 'templates');
+// テンプレート部品はtest-design skillのassets（Agent Skills仕様の推奨配置）に置く
+const DEFAULT_TEMPLATE_ROOT = join(ROOT, 'skills', 'test-design', 'assets', 'templates');
 const DEFAULT_AREA_REGISTRY = join(ROOT, 'test-designs', 'areas.json');
 const PARENT_ID_PATTERN = /^(E2E|INT)-([A-Z]{2,6})-(\d{3})$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 const PLACEHOLDER_PATTERN = /{{[A-Z0-9_]+}}/g;
 const TRANSACTION_VERSION = 1;
 
@@ -71,11 +74,12 @@ const USAGE = `使い方:
     --parent-id E2E-DEMO-002 \\
     --title "検索結果を確認する" \\
     --slug search-results \\
-    --check PW:SMOKE:PLAYWRIGHT_CLI
+    --check PW:SMOKE:正常系:PLAYWRIGHT_CLI
 
 Check指定:
-  --check <MODE>:<TIER>:<EXPLORATION_MODE>[:<NONEの具体的理由>]
+  --check <MODE>:<TIER>:<分類>:<EXPLORATION_MODE>[:<NONEの具体的理由>]
 
+分類は正常系/準正常系/異常系のいずれか（test-designs/README.md 1.3）。
 同じMODEを複数指定するとCheck IDを01、02の順に採番します。
 生成先は test-designs/<level>/<area>/<Parent Case ID>-<slug>.md です。
 同じParent Case IDの既存Docはslugが異なっても上書き・再生成しません。`;
@@ -97,16 +101,31 @@ function assertSingleLine(label, value) {
   }
 }
 
+// 全角コロンで区切った入力は要素が分かれないため、原因が分かるように補足する
+function separatorHint(value) {
+  return value.includes('：') ? '。区切りは半角コロン「:」にしてください' : '';
+}
+
 export function parseCheckArgument(value) {
-  const [mode = '', tier = '', explorationMode = '', ...reasonParts] = value.split(':');
+  const [mode = '', tier = '', caseClass = '', explorationMode = '', ...reasonParts] =
+    value.split(':');
   const noneReason = reasonParts.join(':').trim();
   const modeConfig = MODE_CONFIG.get(mode);
 
   if (modeConfig === undefined) {
-    throw new Error(`Check mode「${mode}」はPW/API/CU/MNのいずれかにしてください`);
+    throw new Error(
+      `Check mode「${mode}」はPW/API/CU/MNのいずれかにしてください${separatorHint(value)}`,
+    );
   }
   if (!VALID_TIERS.has(tier)) {
     throw new Error(`Tier「${tier}」はSMOKE/REGRESSION/EXTENDEDのいずれかにしてください`);
+  }
+  if (!VALID_CASE_CLASSES.has(caseClass)) {
+    throw new Error(
+      `分類「${caseClass}」は${[...VALID_CASE_CLASSES].join('/')}のいずれかにしてください` +
+        '（--check <MODE>:<TIER>:<分類>:<EXPLORATION_MODE>[:<理由>]）' +
+        separatorHint(value),
+    );
   }
   if (!VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(mode)?.has(explorationMode)) {
     throw new Error(
@@ -123,7 +142,7 @@ export function parseCheckArgument(value) {
     assertSingleLine('探索不要理由', noneReason);
   }
 
-  return { mode, tier, explorationMode, noneReason };
+  return { mode, tier, caseClass, explorationMode, noneReason };
 }
 
 export function parseCliArguments(args) {
@@ -232,6 +251,7 @@ export function composeTestDesign(input, options = {}) {
     }
     if (
       !VALID_TIERS.has(check.tier) ||
+      !VALID_CASE_CLASSES.has(check.caseClass) ||
       !VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(check.mode)?.has(check.explorationMode)
     ) {
       throw new Error(`Check指定が不正です: ${JSON.stringify(check)}`);
@@ -253,8 +273,9 @@ export function composeTestDesign(input, options = {}) {
     const checkId = `${input.parentId}-${check.mode}-${String(sequence).padStart(2, '0')}`;
     const sectionNumber = `3.${index + 1}`;
     const code = codeOrProcedure(check.mode, area, input.parentId, sectionNumber);
+    // 列順はCHECK_LIST_HEADER（契約module）に従う
     rows.push(
-      `| ${checkId} | ${EXECUTION_MODE_BY_CHECK_MODE.get(check.mode)} | ` +
+      `| ${checkId} | ${check.caseClass} | ${EXECUTION_MODE_BY_CHECK_MODE.get(check.mode)} | ` +
       `\`${check.explorationMode}\` | ` +
       `${check.tier} | DRAFT | ${code} |`,
     );
@@ -275,7 +296,7 @@ export function composeTestDesign(input, options = {}) {
     PARENT_CASE_ID: input.parentId,
     TITLE: input.title.trim(),
     LEVEL: level,
-    CHECK_LIST_ROWS: rows.join('\n'),
+    CHECK_LIST_TABLE: [formatCheckListHeader(), ...rows].join('\n'),
     CHECK_SECTIONS: sections.join('\n\n'),
   }).trimEnd() + '\n';
 

@@ -10,10 +10,13 @@ Integration／E2Eテスト設計の汎用テンプレート。テストは必ず
 
 ## 必読ドキュメント
 
-- [test-designs/README.md](test-designs/README.md) — ID命名規則、Status、
-  Qualification、安全規則、運用フロー（2パターン＋失敗時の修復フロー）、
-  Doc生成方法、スイート拡張方針、
-  コード実装方針（インライン既定・POMはトリガー駆動）
+- [test-designs/README.md](test-designs/README.md) — ID命名規則、テスト条件・
+  分類・技法（1.3）、Status、Qualification、安全規則、運用フロー（2パターン＋
+  失敗時の修復フロー）、Doc生成方法、スイート拡張方針、
+  コード実装方針（インライン既定・POMはトリガー駆動）、
+  Checkの既定契約と省略規則（9章）
+- [test-designs/GUIDE.md](test-designs/GUIDE.md) — 入門ガイド。全体像と
+  1つのCheckの一生を図と物語で説明する。規則の正ではなく、矛盾時はREADMEが優先
 
 ## 定型手順
 
@@ -76,6 +79,11 @@ Playwrightの`test()`本体では、利用者の操作と確認内容を`// 1. .
 - **healの許可コマンド変更**: `skills/heal/SKILL.md` frontmatterの
   `allowed-tools` と `scripts/check-skills.mjs` の `HEAL_ALLOWED_TOOLS` を
   同時に更新する（完全一致で検証される）。
+- **Design Docテンプレートの変更**: 正本は `skills/test-design/assets/templates/`
+  （Agent Skills仕様の推奨配置。両hostのsymlinkから同じ正本を参照する）。generator
+  （`scripts/create-test-design.mjs`）とchecker（`scripts/check-consistency.mjs`）は
+  契約moduleを共有するrepository toolingとして `scripts/` に置く。テンプレートを
+  変更したら `npm run check` で生成testと整合を検証する。
 - **playwright-cli skillのupstream更新**: `skills/playwright-cli/` は
   microsoft/playwright-cli 由来（Apache-2.0）の改変版。更新時は
   `skills/playwright-cli/LICENSE`、`THIRD_PARTY_NOTICES.md`、SKILL.md冒頭の

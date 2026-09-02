@@ -21,6 +21,7 @@ import {
 } from './create-test-design.mjs';
 import {
   parseDesignDocContent,
+  validateCaseClass,
   validateExplorationSummary,
 } from './check-consistency.mjs';
 
@@ -101,6 +102,7 @@ function assertGeneratedDocIsStructurallyValid(markdown, expectedChecks) {
   assert.equal(doc.parentCaseId, BASE_INPUT.parentId);
   assert.equal(doc.checks.length, expectedChecks);
   for (const generatedCheck of doc.checks) {
+    assert.deepEqual(validateCaseClass(generatedCheck), []);
     assert.deepEqual(validateExplorationSummary(generatedCheck), []);
   }
 }
@@ -108,7 +110,7 @@ function assertGeneratedDocIsStructurallyValid(markdown, expectedChecks) {
 test('PW Checkだけを含む1つのTest Design Docを生成する', () => {
   const markdown = composeTestDesign({
     ...BASE_INPUT,
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   });
 
   assert.match(markdown, /^# E2E-DEMO-002 ログイン成功/m);
@@ -122,10 +124,10 @@ test('4 modeを順番どおり1ファイルへ構成しAPI Checkを完全展開�
   const markdown = composeTestDesign({
     ...BASE_INPUT,
     checks: [
-      check('PW:SMOKE:PLAYWRIGHT_CLI'),
-      check('API:REGRESSION:API_INTEGRATION'),
-      check('CU:EXTENDED:COMPUTER_USE'),
-      check('MN:REGRESSION:MANUAL'),
+      check('PW:SMOKE:正常系:PLAYWRIGHT_CLI'),
+      check('API:REGRESSION:正常系:API_INTEGRATION'),
+      check('CU:EXTENDED:正常系:COMPUTER_USE'),
+      check('MN:REGRESSION:正常系:MANUAL'),
     ],
   });
 
@@ -139,39 +141,40 @@ test('4 modeを順番どおり1ファイルへ構成しAPI Checkを完全展開�
 
 test('各modeのCheckテンプレートが単独で必要な設計節を持つ', () => {
   const cases = [
-    ['PW:REGRESSION:PLAYWRIGHT_CLI', [
+    ['PW:REGRESSION:正常系:PLAYWRIGHT_CLI', [
       '#### シナリオ',
       '#### Assertion設計',
-      '#### 実行契約',
+      '| 外部依存の模擬 |',
     ]],
-    ['API:REGRESSION:API_INTEGRATION', [
+    ['API:REGRESSION:正常系:API_INTEGRATION', [
       '#### シナリオ',
       '#### Assertion設計',
       '対象endpointと役割分担:',
+      '| 外部依存の模擬 |',
     ]],
-    ['CU:REGRESSION:COMPUTER_USE', [
+    ['CU:REGRESSION:正常系:COMPUTER_USE', [
       '#### 自動化できない理由',
       '#### 操作手順',
       '#### 判定基準',
     ]],
-    ['MN:REGRESSION:MANUAL', [
+    ['MN:REGRESSION:正常系:MANUAL', [
       '#### 手動で実行する理由',
       '#### 操作手順',
       '#### 判定基準',
     ]],
   ];
+  // README 9章の「省略は既定」に従い、既定の複写だった節は生成しない
   const commonHeadings = [
-    '#### 前提条件',
-    '#### テストデータ',
-    '#### Fixture',
-    '#### 前処理',
-    '#### 後処理',
+    '#### 前提・データ',
+    '#### 実行契約',
+    '| 後処理 |',
+    '#### 対象外・未確定',
     '#### 探索目的',
     '#### 探索サマリ',
     '#### レビュー済みの期待値',
     '#### Test Status判定根拠',
-    '#### 対象外・未確定',
   ];
+  const removedHeadings = /^#### (前提条件|テストデータ|Fixture|前処理|後処理)$/m;
 
   for (const [checkArgument, modeHeadings] of cases) {
     const markdown = composeTestDesign({
@@ -181,16 +184,50 @@ test('各modeのCheckテンプレートが単独で必要な設計節を持つ',
     for (const heading of [...commonHeadings, ...modeHeadings]) {
       assert.ok(markdown.includes(heading), `${checkArgument}: ${heading}`);
     }
+    assert.doesNotMatch(markdown, removedHeadings, checkArgument);
     assert.doesNotMatch(markdown, /同じ構造|読み替え/);
+    assert.ok(markdown.includes('## 2. 品質リスクとテスト条件'), checkArgument);
+    assert.ok(markdown.includes('| テスト条件 | 分類 | 技法 | 担当 |'), checkArgument);
   }
+});
+
+test('分類をCheck一覧のCheck ID直後の列へ出力する', () => {
+  const markdown = composeTestDesign({
+    ...BASE_INPUT,
+    checks: [
+      check('PW:SMOKE:正常系:PLAYWRIGHT_CLI'),
+      check('PW:REGRESSION:準正常系:PLAYWRIGHT_CLI'),
+      check('API:REGRESSION:異常系:NONE:契約仕様だけで安全側の応答を確定できるため'),
+    ],
+  });
+
+  assert.match(markdown, /\| Check ID \| 分類 \| Execution mode \|/);
+  assert.match(markdown, /\| E2E-DEMO-002-PW-01 \| 正常系 \| PLAYWRIGHT \|/);
+  assert.match(markdown, /\| E2E-DEMO-002-PW-02 \| 準正常系 \| PLAYWRIGHT \|/);
+  assert.match(markdown, /\| E2E-DEMO-002-API-01 \| 異常系 \| API \|/);
+  assertGeneratedDocIsStructurallyValid(markdown, 3);
+});
+
+test('分類の欠落・不正・全角コロン区切りを拒否する', () => {
+  assert.throws(() => check('PW:SMOKE:PLAYWRIGHT_CLI'), /分類「PLAYWRIGHT_CLI」は正常系\/準正常系\/異常系のいずれか/);
+  assert.throws(() => check('PW:SMOKE:normal:PLAYWRIGHT_CLI'), /分類「normal」は/);
+  assert.throws(() => check('PW:SMOKE:NORMAL:PLAYWRIGHT_CLI'), /分類「NORMAL」は/);
+  assert.throws(() => check('PW：SMOKE：正常系：PLAYWRIGHT_CLI'), /区切りは半角コロン/);
+  assert.throws(
+    () => composeTestDesign({
+      ...BASE_INPUT,
+      checks: [{ ...check('PW:SMOKE:正常系:PLAYWRIGHT_CLI'), caseClass: '正常' }],
+    }),
+    /Check指定が不正です/,
+  );
 });
 
 test('同じmodeを複数指定するとCheck IDを連番で採番する', () => {
   const markdown = composeTestDesign({
     ...BASE_INPUT,
     checks: [
-      check('PW:SMOKE:PLAYWRIGHT_CLI'),
-      check('PW:REGRESSION:PLAYWRIGHT_CLI'),
+      check('PW:SMOKE:正常系:PLAYWRIGHT_CLI'),
+      check('PW:REGRESSION:正常系:PLAYWRIGHT_CLI'),
     ],
   });
 
@@ -202,7 +239,7 @@ test('同じmodeを複数指定するとCheck IDを連番で採番する', () =>
 test('NONEは理由を探索目的へ入れ、探索サマリを固定値にする', () => {
   const markdown = composeTestDesign({
     ...BASE_INPUT,
-    checks: [check('API:REGRESSION:NONE:契約仕様だけで期待結果を確定できるため')],
+    checks: [check('API:REGRESSION:正常系:NONE:契約仕様だけで期待結果を確定できるため')],
   });
 
   assert.match(markdown, /対象外（契約仕様だけで期待結果を確定できるため）/);
@@ -212,11 +249,11 @@ test('NONEは理由を探索目的へ入れ、探索サマリを固定値にす�
 
 test('NONEの理由欠落とmode別の不正なExploration modeを拒否する', () => {
   assert.throws(
-    () => check('PW:SMOKE:NONE'),
+    () => check('PW:SMOKE:正常系:NONE'),
     /具体的な探索不要理由が必要/,
   );
   assert.throws(
-    () => check('API:REGRESSION:PLAYWRIGHT_CLI'),
+    () => check('API:REGRESSION:正常系:PLAYWRIGHT_CLI'),
     /Check mode=APIでは使用できません/,
   );
 });
@@ -267,28 +304,28 @@ test('NONEの理由に既知のplaceholderを使用できない', () => {
     'なし',
   ]) {
     assert.throws(
-      () => check(`PW:SMOKE:NONE:${reason}`),
+      () => check(`PW:SMOKE:正常系:NONE:${reason}`),
       /具体的な探索不要理由が必要/,
     );
   }
 
   assert.doesNotThrow(
-    () => check('PW:SMOKE:NONE:TODO リスト画面は仕様上の対象外であるため'),
+    () => check('PW:SMOKE:正常系:NONE:TODO リスト画面は仕様上の対象外であるため'),
   );
   assert.doesNotThrow(
-    () => check('PW:SMOKE:NONE:TODO List画面は別の契約テストで保証されるため'),
+    () => check('PW:SMOKE:正常系:NONE:TODO List画面は別の契約テストで保証されるため'),
   );
   assert.doesNotThrow(
-    () => check('PW:SMOKE:NONE:Todo item機能は別シナリオで保証されるため'),
+    () => check('PW:SMOKE:正常系:NONE:Todo item機能は別シナリオで保証されるため'),
   );
   assert.doesNotThrow(
-    () => check('API:REGRESSION:NONE:Todo APIは別の契約テストで保証されるため'),
+    () => check('API:REGRESSION:正常系:NONE:Todo APIは別の契約テストで保証されるため'),
   );
   assert.doesNotThrow(
-    () => check('PW:SMOKE:NONE:Todo after reloadは別シナリオで保証されるため'),
+    () => check('PW:SMOKE:正常系:NONE:Todo after reloadは別シナリオで保証されるため'),
   );
   assert.doesNotThrow(
-    () => check('PW:SMOKE:NONE:Todo pending stateは別シナリオで保証されるため'),
+    () => check('PW:SMOKE:正常系:NONE:Todo pending stateは別シナリオで保証されるため'),
   );
 });
 
@@ -297,12 +334,12 @@ test('構造を壊すtemplate token形式の入力を拒否する', () => {
     () => composeTestDesign({
       ...BASE_INPUT,
       title: '{{CHECK_SECTIONS}}',
-      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+      checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
     }),
     /template token形式/,
   );
   assert.throws(
-    () => check('API:REGRESSION:NONE:{{EXPLORATION_RUN}}'),
+    () => check('API:REGRESSION:正常系:NONE:{{EXPLORATION_RUN}}'),
     /template token形式/,
   );
 });
@@ -312,7 +349,7 @@ test('AreaレジストリにないParent Case IDを拒否する', () => {
     () => composeTestDesign({
       ...BASE_INPUT,
       parentId: 'E2E-AUTH-001',
-      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+      checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
     }),
     /Area「AUTH」はtest-designs\/areas\.jsonのAreaレジストリに登録されていません/,
   );
@@ -323,7 +360,7 @@ test('生成先をParent Caseから決定し、同じParent Case IDの再生成�
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const input = {
     ...BASE_INPUT,
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   };
 
   const expected = join(
@@ -342,7 +379,7 @@ test('生成先をParent Caseから決定し、同じParent Case IDの再生成�
       ...input,
       title: '別のタイトル',
       slug: 'different-slug',
-      checks: [check('API:REGRESSION:API_INTEGRATION')],
+      checks: [check('API:REGRESSION:正常系:API_INTEGRATION')],
     }, root),
     /E2E-DEMO-002-login-success\.md/,
   );
@@ -360,22 +397,22 @@ test('同じParent Case IDの複数並行生成は1件だけ成功する', async
     runWriterProcess(root, {
       ...BASE_INPUT,
       slug: 'first',
-      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+      checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
     }, startAt),
     runWriterProcess(root, {
       ...BASE_INPUT,
       slug: 'second',
-      checks: [check('API:REGRESSION:API_INTEGRATION')],
+      checks: [check('API:REGRESSION:正常系:API_INTEGRATION')],
     }, startAt),
     runWriterProcess(root, {
       ...BASE_INPUT,
       slug: 'third',
-      checks: [check('CU:EXTENDED:COMPUTER_USE')],
+      checks: [check('CU:EXTENDED:正常系:COMPUTER_USE')],
     }, startAt),
     runWriterProcess(root, {
       ...BASE_INPUT,
       slug: 'fourth',
-      checks: [check('MN:REGRESSION:MANUAL')],
+      checks: [check('MN:REGRESSION:正常系:MANUAL')],
     }, startAt),
   ]);
 
@@ -395,7 +432,7 @@ test('異常終了後の保留中生成をPIDや期限に依存せず完了す�
   const recoveredInput = {
     ...BASE_INPUT,
     slug: 'recovered',
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   };
   const recoveredMarkdown = composeTestDesign(recoveredInput);
   const token = 'recovery-token';
@@ -419,7 +456,7 @@ test('異常終了後の保留中生成をPIDや期限に依存せず完了す�
     () => writeTestDesign({
       ...BASE_INPUT,
       slug: 'new-request',
-      checks: [check('API:REGRESSION:API_INTEGRATION')],
+      checks: [check('API:REGRESSION:正常系:API_INTEGRATION')],
     }, root),
     /E2E-DEMO-002-recovered\.md/,
   );
@@ -450,7 +487,7 @@ test('破損したtransactionから空のDocを公開しない', (t) => {
   assert.throws(
     () => writeTestDesign({
       ...BASE_INPUT,
-      checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+      checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
     }, root),
     /保留中生成記録が不正です/,
   );
@@ -464,7 +501,7 @@ test('final公開後に異常終了したtransactionを完了扱いで回収す�
   const recoveredInput = {
     ...BASE_INPUT,
     slug: 'already-linked',
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   };
   const recoveredMarkdown = composeTestDesign(recoveredInput);
   const token = 'already-linked-token';
@@ -491,7 +528,7 @@ test('final公開後に異常終了したtransactionを完了扱いで回収す�
     () => writeTestDesign({
       ...BASE_INPUT,
       slug: 'new-request',
-      checks: [check('API:REGRESSION:API_INTEGRATION')],
+      checks: [check('API:REGRESSION:正常系:API_INTEGRATION')],
     }, root),
     /E2E-DEMO-002-already-linked\.md/,
   );
@@ -505,7 +542,7 @@ test('pending削除後に残った一時ファイルを既存Doc判定時に回�
   const input = {
     ...BASE_INPUT,
     slug: 'existing',
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   };
   const outputPath = join(
     root,
@@ -537,7 +574,7 @@ test('保留中生成を複数プロセスが同時回復してもDocは1件だ�
   const recoveredInput = {
     ...BASE_INPUT,
     slug: 'recovered',
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   };
   const recoveredMarkdown = composeTestDesign(recoveredInput);
   writePendingTransaction(root, {
@@ -550,12 +587,12 @@ test('保留中生成を複数プロセスが同時回復してもDocは1件だ�
     runWriterProcess(root, {
       ...BASE_INPUT,
       slug: 'first-retry',
-      checks: [check('API:REGRESSION:API_INTEGRATION')],
+      checks: [check('API:REGRESSION:正常系:API_INTEGRATION')],
     }, startAt),
     runWriterProcess(root, {
       ...BASE_INPUT,
       slug: 'second-retry',
-      checks: [check('CU:EXTENDED:COMPUTER_USE')],
+      checks: [check('CU:EXTENDED:正常系:COMPUTER_USE')],
     }, startAt),
   ]);
 
@@ -574,7 +611,7 @@ test('最終Docは完成済み内容だけを公開しtransaction一時ファイ
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const input = {
     ...BASE_INPUT,
-    checks: [check('PW:SMOKE:PLAYWRIGHT_CLI')],
+    checks: [check('PW:SMOKE:正常系:PLAYWRIGHT_CLI')],
   };
   const expectedMarkdown = composeTestDesign(input);
 

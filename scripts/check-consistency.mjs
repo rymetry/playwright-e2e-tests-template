@@ -12,7 +12,7 @@
  * 処理の流れ:
  *   Step 1. test-designs/e2e・test-designs/int 配下のDesign Docを収集しパースする
  *   Step 2. e2e配下の*.spec.tsを収集し、test()のタイトルとタグをパースする
- *   Step 3. DocとspecをルールNo.1〜10で突き合わせ、問題を収集する
+ *   Step 3. DocとspecをルールNo.1〜11で突き合わせ、問題を収集する
  *   Step 4. 結果を出力し、問題が1件でもあればexit 1で終了する
  *
  * チェックルール一覧:
@@ -26,6 +26,7 @@
  *   No.8 CU/MN CheckのIDがspecに存在しない（自動実行対象ではないため）
  *   No.9 specの全タイトルがCheck IDで始まり、そのIDがいずれかのDocに存在する
  *   No.10 各Checkの探索サマリが必須構造・mode・Statusごとの状態契約に従う
+ *   No.11 Check一覧の分類が正常系／準正常系／異常系のいずれかである（README 1.3）
  *
  * タグ（No.6・No.7）は `{ tag: '@smoke' }` オプション（公式推奨）と
  * タイトル内埋め込みの両方を検出する。ただしtest()直下のみ対応し、
@@ -37,12 +38,15 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  CHECK_LIST_HEADER,
   containsContractPlaceholder,
   EXECUTION_MODE_BY_CHECK_MODE,
   isConcreteNoneReason,
   normalizeContractToken,
   parseAreaRegistryContent,
+  VALID_CASE_CLASSES,
   VALID_EXPLORATION_MODES_BY_CHECK_MODE,
+  VALID_TIERS,
 } from './test-design-contract.mjs';
 
 // このスクリプトはscripts/直下に置かれる前提。親ディレクトリ=リポジトリルート
@@ -56,9 +60,9 @@ const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}$/;
 const CHECK_ID_LOOSE = /(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}/;
 
 const VALID_STATUSES = new Set(['DRAFT', 'EVALUATING', 'ACTIVE', 'QUARANTINE', 'RETIRED']);
-// test-designs/README.md 3章のTier。不正値（テンプレートの選択肢表記の残置等)は
-// 「SMOKE以外」としてサイレントにsmoke suiteから漏れるため、列挙検証する
-const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
+// Tier（README 3章）と分類（README 1.3）は契約moduleの列挙で検証する。不正値
+// （テンプレートの選択肢表記の残置等）は「SMOKE以外」としてサイレントにsmoke suiteから
+// 漏れる、または分類が読めないまま通るため、列挙検証する
 // specの存在を要求するStatus（DRAFTは実装前でもよい）
 const STATUSES_REQUIRING_SPEC = new Set(['EVALUATING', 'ACTIVE', 'QUARANTINE']);
 // 自動実行されるExecution mode（specと突き合わせる対象）
@@ -136,8 +140,8 @@ function rel(filePath) {
 /**
  * 1つのDesign Docから次を抽出する。
  * - Parent Case ID: メタデータ表の「Parent Case ID」行
- * - Check一覧の各行: 6列表のデータ行
- *   （列順はテンプレート固定: ID / Execution mode / Exploration mode / Tier / Status / Code）
+ * - Check一覧の各行: CHECK_LIST_HEADER（契約module）と同じ列構成のデータ行。
+ *   列は見出し名で引き、indexに依存しない
  * - 各Checkの判定: 「### ... <Check ID>: ...」見出しの節にあるStatus判定表
  */
 function parseDesignDoc(filePath) {
@@ -627,9 +631,11 @@ function parseExplorationSummary(section) {
 
 export function parseDesignDocContent(filePath, content) {
   const renderedContent = stripNonRenderedMarkdown(content);
-  const checkListTable = parseStrictMarkdownTable(
-    extractCheckList(renderedContent),
-    ['Check ID', 'Execution mode', 'Exploration mode', 'Tier', 'Status', 'Code / 手順'],
+  const checkListSource = extractCheckList(renderedContent);
+  const checkListTable = parseStrictMarkdownTable(checkListSource, CHECK_LIST_HEADER);
+  // 「分類」列導入前の旧形式ヘッダ。読み取れないDocへ移行案内を出すために検出する
+  const legacyCheckListHeader = /^\s*\|?\s*Check ID\s*\|\s*Execution mode\s*\|/m.test(
+    checkListSource,
   );
 
   const metadataTable = parseStrictMarkdownTable(
@@ -640,15 +646,20 @@ export function parseDesignDocContent(filePath, content) {
 
   const checks = [];
   for (const cells of checkListTable.rows) {
-    const id = cells[0] ?? '';
+    // 列名→値のrecordにしてから読む（列順の変更に強くする）
+    const row = Object.fromEntries(
+      CHECK_LIST_HEADER.map((name, index) => [name, cells[index] ?? '']),
+    );
+    const id = row['Check ID'];
     const sections = extractCheckSections(renderedContent, id);
     const section = sections[0];
     checks.push({
       id,
-      executionMode: normalizeMarkdownCode(cells[1] ?? ''),
-      explorationMode: normalizeMarkdownCode(cells[2] ?? ''),
-      tier: cells[3] ?? '',
-      status: cells[4] ?? '',
+      caseClass: row['分類'],
+      executionMode: normalizeMarkdownCode(row['Execution mode']),
+      explorationMode: normalizeMarkdownCode(row['Exploration mode']),
+      tier: row['Tier'],
+      status: row['Status'],
       // MODE部分（PW/API/CU/MN）。ID形式が不正な場合はundefined
       mode: id.match(CHECK_ID_PATTERN)?.[2],
       // このCheckの節にある「Test Status判定根拠」表の判定値
@@ -663,6 +674,7 @@ export function parseDesignDocContent(filePath, content) {
     parentCaseId,
     checks,
     checkSectionIds: extractCheckSectionIds(renderedContent),
+    legacyCheckListHeader,
   };
 }
 
@@ -700,6 +712,17 @@ export function validateParentCaseArea(parentCaseId, registeredAreas) {
     return [];
   }
   return [`Parent Case ID「${parentCaseId}」のArea「${area}」がAreaレジストリにありません`];
+}
+
+// ルールNo.11: 分類はREADME 1.3の3値だけを、Tierと同じく表示値の厳密一致で受け入れる
+export function validateCaseClass(check) {
+  if (VALID_CASE_CLASSES.has(check.caseClass)) {
+    return [];
+  }
+  return [
+    `「${check.id}」の分類「${check.caseClass}」は不正な値です` +
+      `（${[...VALID_CASE_CLASSES].join('/')}のいずれか。README 1.3）`,
+  ];
 }
 
 /**
@@ -896,7 +919,7 @@ function parseSpecTitles(filePath) {
 
 function main() {
   const registeredAreas = parseAreaRegistryContent(readFileSync(AREA_REGISTRY_PATH, 'utf8'));
-  // Step 1: Doc収集（templates/と_archive/は対象外のため、e2e/intディレクトリのみ走査）
+  // Step 1: Doc収集（テンプレート部品はskills/test-design/assets/にあり対象外。e2e/intディレクトリのみ走査）
   const docFiles = [
     ...listFiles(join(ROOT, 'test-designs', 'e2e'), '.md'),
     ...listFiles(join(ROOT, 'test-designs', 'int'), '.md'),
@@ -955,7 +978,13 @@ function main() {
     }
 
     if (doc.checks.length === 0) {
-      report(docPath, 'Check一覧からCheckを1件も読み取れませんでした');
+      report(
+        docPath,
+        'Check一覧からCheckを1件も読み取れませんでした' +
+          (doc.legacyCheckListHeader
+            ? '（Check一覧に「分類」列がありません。README 9.4の移行手順に従い、Check IDの直後に列を追加してください）'
+            : ''),
+      );
     }
 
     for (const checkId of findOrphanCheckSectionIds(doc)) {
@@ -983,6 +1012,11 @@ function main() {
       // ルールNo.3: Tier値
       if (!VALID_TIERS.has(check.tier)) {
         report(docPath, `「${check.id}」のTier「${check.tier}」は不正な値です（SMOKE/REGRESSION/EXTENDEDのいずれか）`);
+      }
+
+      // ルールNo.11: 分類値（不正でもStatus依存の後続チェックは続ける）
+      for (const problem of validateCaseClass(check)) {
+        report(docPath, problem);
       }
 
       // ルールNo.3（前半）: Status値

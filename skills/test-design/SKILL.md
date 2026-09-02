@@ -19,7 +19,7 @@ shell commandもrepository rootをworking directoryとして実行する。
 まず `test-designs/README.md` の記述方針（1.1）・命名規則（2章）・Status（4章）・
 共通の安全規則（5章）・運用フローとDoc生成方法（6章）を読み、従う。
 テンプレート部品を手作業でコピー・結合せず、`npm run create:test-design`で
-1シナリオ1ファイルのDesign Docを生成する。
+1 Parent Case 1ファイルのDesign Docを生成する。
 
 入力の解釈:
 
@@ -39,7 +39,8 @@ shell commandもrepository rootをworking directoryとして実行する。
    SEQ+1を新しいParent Case IDとする。欠番・RETIRED済みIDは再利用しない。
    SEQが999に達している場合は採番せず、AREAの分割等をユーザーへ相談して
    停止する。
-3. **生成条件の確定**: slug、Execution mode、Tier、Exploration modeを決める。
+3. **生成条件の確定**: slug、Execution mode、Tier、分類（README 1.3の
+   正常系／準正常系／異常系。分岐の原因で判断する）、Exploration modeを決める。
    判断できない場合はユーザーに確認する。slugは英小文字ケバブケース
    （`--skeleton`時は仮slugでよい。DRAFTの間は変更可、IDは不変）。探索を予定する
    PW Checkは`PLAYWRIGHT_CLI`、API Checkは`API_INTEGRATION`、CU Checkは
@@ -47,23 +48,30 @@ shell commandもrepository rootをworking directoryとして実行する。
    「探索目的」へ記録する具体的理由も確定する。理由を推測で発明しない。
 4. **Doc生成（`--skeleton`でも必須）**: README 6.0の形式で
    `npm run create:test-design`を実行する。各Checkは次の形式で指定する。
-   - 探索あり: `--check PW:SMOKE:PLAYWRIGHT_CLI`
-   - 探索なし: `--check API:REGRESSION:NONE:<具体的な探索不要理由>`
+   - 探索あり: `--check PW:SMOKE:正常系:PLAYWRIGHT_CLI`
+   - 探索なし: `--check API:REGRESSION:正常系:NONE:<具体的な探索不要理由>`
    - 同じExecution modeに複数Checkが必要なら`--check`を繰り返す
 
    生成処理がH1、メタデータ、Check一覧、Check ID、章番号、Codeパス、探索サマリ、
    判定`DRAFT`を一括構成する。生成先は
    `test-designs/<level小文字>/<area小文字>/<ID>-<slug>.md`であり、既存ファイルは
    上書きしない。生成後のMarkdownだけをDesign Docとして扱い、
-   `test-designs/templates/`の部品は成果物として扱わない。
+   `assets/templates/`（本skill配下）の部品は成果物として扱わない。
 5. **生成結果の構造確認**: 指定したCheckだけがCheck一覧とCheck設計に同じ順序で
    生成され、Check ID、章番号、mode、Tier、探索サマリ初期値が一致することを確認する。
    mode別Checkは完全な構造で生成されるため、他modeの節を参照して補完しない。
 6. **本文記入**:
    - 通常モード（パターン1）: ユーザーが提供した仕様・Issue・受入条件をもとに
-     目的・品質リスク・シナリオ・Assertion案・テストデータ・前提条件を記入する。
+     目的・品質リスクとテスト条件表・シナリオ・Assertion案・前提・データを記入する。
      **根拠のない期待値を発明しない**。仕様から確認できない項目は
      「対象外・未確定」に残す。
+   - テンプレートはREADME 9章の「省略は既定」に従い短い。次の項目は毎回、
+     既定でよいか逸脱があるかを判断し、逸脱だけをDocに書く（判断せずに
+     省略しない）:
+     テスト条件表（リスク→条件→分類→技法→担当）、開始状態、入力値と意味クラス、
+     動的データ・競合回避、Fixture・前処理、既定からの逸脱、外部依存の模擬
+     （README 1.3の範囲内）、後処理（データを作成・変更する場合は必須）、
+     下位レベルへ委ねる項目、対象外・未確定。
    - `--skeleton`モード（パターン2）: メタデータ・Check一覧・探索目的だけを
      記入する。未記入の節は雛形の汎用文（実ケースの期待値に見える文）を
      残さず、本文を `未記入（探索後に本記入）` へ置換する。

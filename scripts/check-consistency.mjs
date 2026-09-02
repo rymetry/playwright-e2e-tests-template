@@ -60,9 +60,8 @@ const CHECK_ID_PATTERN = /^(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}$/;
 const CHECK_ID_LOOSE = /(E2E|INT)-[A-Z]{2,6}-\d{3}-(PW|API|CU|MN)-\d{2}/;
 
 const VALID_STATUSES = new Set(['DRAFT', 'EVALUATING', 'ACTIVE', 'QUARANTINE', 'RETIRED']);
-// Tier（README 3章）と分類（README 1.3）は契約moduleの列挙で検証する。不正値
-// （テンプレートの選択肢表記の残置等）は「SMOKE以外」としてサイレントにsmoke suiteから
-// 漏れる、または分類が読めないまま通るため、列挙検証する
+// Tier（README 3章）と分類（README 1.3）の列挙値は契約module（VALID_TIERS /
+// VALID_CASE_CLASSES）から読み込む。検証はルールNo.3・No.11で行う
 // specの存在を要求するStatus（DRAFTは実装前でもよい）
 const STATUSES_REQUIRING_SPEC = new Set(['EVALUATING', 'ACTIVE', 'QUARANTINE']);
 // 自動実行されるExecution mode（specと突き合わせる対象）
@@ -140,8 +139,8 @@ function rel(filePath) {
 /**
  * 1つのDesign Docから次を抽出する。
  * - Parent Case ID: メタデータ表の「Parent Case ID」行
- * - Check一覧の各行: CHECK_LIST_HEADER（契約module）と同じ列構成のデータ行。
- *   列は見出し名で引き、indexに依存しない
+ * - Check一覧の各行: CHECK_LIST_HEADER（契約module）とヘッダが順序込みで厳密一致する表の
+ *   データ行。値は列名→値のrecordにして読み、契約moduleの定義順の変更に追従させる
  * - 各Checkの判定: 「### ... <Check ID>: ...」見出しの節にあるStatus判定表
  */
 function parseDesignDoc(filePath) {
@@ -646,7 +645,7 @@ export function parseDesignDocContent(filePath, content) {
 
   const checks = [];
   for (const cells of checkListTable.rows) {
-    // 列名→値のrecordにしてから読む（列順の変更に強くする）
+    // 列名→値のrecordにしてから読む（CHECK_LIST_HEADERの定義順の変更に追従させる）
     const row = Object.fromEntries(
       CHECK_LIST_HEADER.map((name, index) => [name, cells[index] ?? '']),
     );
@@ -1011,7 +1010,7 @@ function main() {
 
       // ルールNo.3: Tier値
       if (!VALID_TIERS.has(check.tier)) {
-        report(docPath, `「${check.id}」のTier「${check.tier}」は不正な値です（SMOKE/REGRESSION/EXTENDEDのいずれか）`);
+        report(docPath, `「${check.id}」のTier「${check.tier}」は不正な値です（${[...VALID_TIERS].join('/')}のいずれか）`);
       }
 
       // ルールNo.11: 分類値（不正でもStatus依存の後続チェックは続ける）

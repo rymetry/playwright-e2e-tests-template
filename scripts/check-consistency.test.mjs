@@ -10,14 +10,13 @@ import {
   validateExplorationSummary,
 } from './check-consistency.mjs';
 import {
-  CHECK_LIST_HEADER,
   EXECUTION_MODE_BY_CHECK_MODE,
+  formatCheckListHeader,
   parseAreaRegistryContent,
 } from './test-design-contract.mjs';
 
-// Check一覧のheader／delimiterは契約moduleの列定義から組み立てる（リテラルを複製しない）
-const H = `| ${CHECK_LIST_HEADER.join(' | ')} |`;
-const D = `|${CHECK_LIST_HEADER.map(() => '---').join('|')}|`;
+// Check一覧のheader／delimiterはgeneratorと同じ契約moduleの関数から得る（リテラルを複製しない）
+const [H, D] = formatCheckListHeader().split('\n');
 
 const FILE_PATH = '/tmp/E2E-TST-001-exploration-summary.md';
 const FIELD_NAMES = [
@@ -1328,4 +1327,18 @@ test('分類列のない旧形式のCheck一覧は読み取らず、移行案内
   assert.deepEqual(doc.checks, []);
   assert.equal(doc.legacyCheckListHeader, true);
   assert.equal(parseDesignDocContent(FILE_PATH, buildDoc([config])).legacyCheckListHeader, false);
+});
+
+test('新形式ヘッダでデータ行だけ旧6列のDocには移行案内フラグを立てない', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const content = buildDoc([config]).replace(config.row, config.row.replace('| 正常系 ', ''));
+  const doc = parseDesignDocContent(FILE_PATH, content);
+
+  // 列数不一致で表全体が無効になるが、ヘッダは新形式なので「列を追加」の案内は誤りになる
+  assert.deepEqual(doc.checks, []);
+  assert.equal(doc.legacyCheckListHeader, false);
 });

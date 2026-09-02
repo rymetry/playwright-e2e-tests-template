@@ -24,6 +24,7 @@ import {
   validateCaseClass,
   validateExplorationSummary,
 } from './check-consistency.mjs';
+import { formatCheckListHeader } from './test-design-contract.mjs';
 
 const BASE_INPUT = {
   parentId: 'E2E-DEMO-002',
@@ -201,6 +202,12 @@ test('分類をCheck一覧のCheck ID直後の列へ出力する', () => {
     ],
   });
 
+  // 人間が読む契約としてヘッダの文字列を固定する（列名・順序の誤編集を検出する）
+  assert.equal(
+    formatCheckListHeader(),
+    '| Check ID | 分類 | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n' +
+      '|---|---|---|---|---|---|---|',
+  );
   assert.match(markdown, /\| Check ID \| 分類 \| Execution mode \|/);
   assert.match(markdown, /\| E2E-DEMO-002-PW-01 \| 正常系 \| PLAYWRIGHT \|/);
   assert.match(markdown, /\| E2E-DEMO-002-PW-02 \| 準正常系 \| PLAYWRIGHT \|/);
@@ -245,6 +252,11 @@ test('NONEは理由を探索目的へ入れ、探索サマリを固定値にす�
   assert.match(markdown, /対象外（契約仕様だけで期待結果を確定できるため）/);
   assert.match(markdown, /\| Run \/ 観測環境 \| なし（探索不要） \|/);
   assertGeneratedDocIsStructurallyValid(markdown, 1);
+  // 第5要素以降は「:」を含めて1つの理由として結合する
+  assert.equal(
+    check('API:REGRESSION:異常系:NONE:契約仕様（v2: 4xx系）で確定できるため').noneReason,
+    '契約仕様（v2: 4xx系）で確定できるため',
+  );
 });
 
 test('NONEの理由欠落とmode別の不正なExploration modeを拒否する', () => {

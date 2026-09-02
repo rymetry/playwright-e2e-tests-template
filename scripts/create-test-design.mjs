@@ -101,30 +101,26 @@ function assertSingleLine(label, value) {
   }
 }
 
-// 全角コロンで区切った入力は要素が分かれないため、原因が分かるように補足する
-function separatorHint(value) {
-  return value.includes('：') ? '。区切りは半角コロン「:」にしてください' : '';
-}
-
 export function parseCheckArgument(value) {
+  // 全角コロンで区切ると要素が分かれず後続の検証がすべて誤る。どの位置でも先に検出する
+  if (value.includes('：')) {
+    throw new Error(`--checkの区切りは半角コロン「:」にしてください: ${value}`);
+  }
   const [mode = '', tier = '', caseClass = '', explorationMode = '', ...reasonParts] =
     value.split(':');
   const noneReason = reasonParts.join(':').trim();
   const modeConfig = MODE_CONFIG.get(mode);
 
   if (modeConfig === undefined) {
-    throw new Error(
-      `Check mode「${mode}」はPW/API/CU/MNのいずれかにしてください${separatorHint(value)}`,
-    );
+    throw new Error(`Check mode「${mode}」はPW/API/CU/MNのいずれかにしてください`);
   }
   if (!VALID_TIERS.has(tier)) {
-    throw new Error(`Tier「${tier}」はSMOKE/REGRESSION/EXTENDEDのいずれかにしてください`);
+    throw new Error(`Tier「${tier}」は${[...VALID_TIERS].join('/')}のいずれかにしてください`);
   }
   if (!VALID_CASE_CLASSES.has(caseClass)) {
     throw new Error(
       `分類「${caseClass}」は${[...VALID_CASE_CLASSES].join('/')}のいずれかにしてください` +
-        '（--check <MODE>:<TIER>:<分類>:<EXPLORATION_MODE>[:<理由>]）' +
-        separatorHint(value),
+        '（--check <MODE>:<TIER>:<分類>:<EXPLORATION_MODE>[:<理由>]）',
     );
   }
   if (!VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(mode)?.has(explorationMode)) {
@@ -273,7 +269,8 @@ export function composeTestDesign(input, options = {}) {
     const checkId = `${input.parentId}-${check.mode}-${String(sequence).padStart(2, '0')}`;
     const sectionNumber = `3.${index + 1}`;
     const code = codeOrProcedure(check.mode, area, input.parentId, sectionNumber);
-    // 列順はCHECK_LIST_HEADER（契約module）に従う
+    // 列順はCHECK_LIST_HEADER（契約module）と手動で揃えている。定義順を変えたら両方を更新する
+    // （ずれは生成testのcheckerによる往復検証で検出される）
     rows.push(
       `| ${checkId} | ${check.caseClass} | ${EXECUTION_MODE_BY_CHECK_MODE.get(check.mode)} | ` +
       `\`${check.explorationMode}\` | ` +

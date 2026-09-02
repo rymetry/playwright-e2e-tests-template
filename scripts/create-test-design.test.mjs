@@ -220,12 +220,18 @@ test('分類の欠落・不正・全角コロン区切りを拒否する', () =>
   assert.throws(() => check('PW:SMOKE:normal:PLAYWRIGHT_CLI'), /分類「normal」は/);
   assert.throws(() => check('PW:SMOKE:NORMAL:PLAYWRIGHT_CLI'), /分類「NORMAL」は/);
   assert.throws(() => check('PW：SMOKE：正常系：PLAYWRIGHT_CLI'), /区切りは半角コロン/);
+  // 理由文（第5要素以降）の全角コロンは区切りではないので受け入れる
+  assert.equal(
+    check('API:REGRESSION:異常系:NONE:契約仕様（v2：4xx系）で確定できるため').noneReason,
+    '契約仕様（v2：4xx系）で確定できるため',
+  );
+  // JSON経由の入力もCLIと同じ規則・同じ文言で検証する
   assert.throws(
     () => composeTestDesign({
       ...BASE_INPUT,
       checks: [{ ...check('PW:SMOKE:正常系:PLAYWRIGHT_CLI'), caseClass: '正常' }],
     }),
-    /Check指定が不正です/,
+    /Check指定が不正です: 分類「正常」は/,
   );
 });
 

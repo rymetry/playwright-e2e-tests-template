@@ -37,6 +37,10 @@
 
 ## 3. Check設計
 
+各Checkで記載のない項目はREADME 9章の既定契約に従う。Accessibility／Visualは
+既定で対象外で、対象にする場合だけAssertion設計に`##### Accessibility`／`##### Visual`を
+追加する。
+
 {{CHECK_SECTIONS}}
 
 ## 4. 関連仕様

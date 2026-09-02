@@ -33,8 +33,6 @@ Then:
 - 認証・認可の結果
 - 外部サービス連携の観測可能な結果
 
-Accessibility／Visualは対象外（API Checkのため）。
-
 #### 実行契約
 
 | 項目 | 値 |
@@ -48,8 +46,6 @@ Accessibility／Visualは対象外（API Checkのため）。
 
 - 対象endpoint、認証方式（秘密情報は書かない）、依存する外部サービス
 - PW Checkとの役割分担。同じ保証を二重に持たない
-
-記載のない項目はREADME 9章の既定契約に従う。
 
 #### 対象外・未確定
 

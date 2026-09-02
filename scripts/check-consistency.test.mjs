@@ -12,6 +12,7 @@ import {
 import {
   EXECUTION_MODE_BY_CHECK_MODE,
   formatCheckListHeader,
+  formatCheckListRow,
   parseAreaRegistryContent,
 } from './test-design-contract.mjs';
 
@@ -106,7 +107,15 @@ function buildCheck({
     : '';
 
   return {
-    row: `| ${id} | ${caseClass} | ${executionMode} | ${explorationMode} | REGRESSION | ${status} | 未実装 |`,
+    row: formatCheckListRow({
+      'Check ID': id,
+      '分類': caseClass,
+      'Execution mode': executionMode,
+      'Exploration mode': explorationMode,
+      'Tier': 'REGRESSION',
+      'Status': status,
+      'Code / 手順': '未実装',
+    }),
     section: `### 3.1 ${id}: テスト対象\n\n#### 探索目的\n\n${resolvedPurpose}\n\n#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n${summaryBlock}${duplicateBlock}\n\n#### Test Status判定根拠\n\n| 項目 | 値 |\n|---|---|\n| 判定 | ${status} |`,
   };
 }
@@ -708,10 +717,10 @@ test('Check一覧は正規のheaderとdelimiterを持つ7列表だけを受け�
       name: '8列',
       content: validContent
         .replace(
-          `${H}`,
+          H,
           `${H} Extra |`,
         )
-        .replace(`${D}`, `${D}---|`)
+        .replace(D, `${D}---|`)
         .replace(config.row, config.row.replace(/\|$/, '| extra |')),
     },
   ];
@@ -748,8 +757,8 @@ test('外側pipeを省略したGFMのCheck一覧を受け入れる', () => {
     explorationMode: 'PLAYWRIGHT_CLI',
   });
   const table = [
-    `${H}`,
-    `${D}`,
+    H,
+    D,
     config.row,
   ].join('\n');
   const withoutOuterPipes = table
@@ -1313,32 +1322,25 @@ test('Check一覧の分類は正常系／準正常系／異常系だけを受け
   }
 });
 
-test('分類列のない旧形式のCheck一覧は読み取らず、移行案内のためのフラグを立てる', () => {
+test('Check一覧を読めない理由を返す（旧形式ヘッダ・列数不一致）', () => {
   const config = buildCheck({
     id: 'E2E-TST-001-PW-01',
     checkMode: 'PW',
     explorationMode: 'PLAYWRIGHT_CLI',
   });
+  const valid = buildDoc([config]);
   const legacyHeader = '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|';
   const legacyRow = config.row.replace('| 正常系 ', '');
-  const content = buildDoc([config]).replace(`${H}\n${D}\n${config.row}`, `${legacyHeader}\n${legacyRow}`);
-  const doc = parseDesignDocContent(FILE_PATH, content);
 
-  assert.deepEqual(doc.checks, []);
-  assert.equal(doc.legacyCheckListHeader, true);
-  assert.equal(parseDesignDocContent(FILE_PATH, buildDoc([config])).legacyCheckListHeader, false);
-});
+  const legacyDoc = parseDesignDocContent(FILE_PATH, valid.replace(`${H}\n${D}\n${config.row}`, `${legacyHeader}\n${legacyRow}`));
+  assert.deepEqual(legacyDoc.checks, []);
+  assert.match(legacyDoc.checkListProblem, /ヘッダが期待と異なります（期待: \| Check ID \| 分類 \|/);
+  assert.match(legacyDoc.checkListProblem, /実際: \| Check ID \| Execution mode \|/);
 
-test('新形式ヘッダでデータ行だけ旧6列のDocには移行案内フラグを立てない', () => {
-  const config = buildCheck({
-    id: 'E2E-TST-001-PW-01',
-    checkMode: 'PW',
-    explorationMode: 'PLAYWRIGHT_CLI',
-  });
-  const content = buildDoc([config]).replace(config.row, config.row.replace('| 正常系 ', ''));
-  const doc = parseDesignDocContent(FILE_PATH, content);
+  // ヘッダは新形式でデータ行だけ旧6列の半移行状態は、行の列数不一致として報告する
+  const halfMigrated = parseDesignDocContent(FILE_PATH, valid.replace(config.row, legacyRow));
+  assert.deepEqual(halfMigrated.checks, []);
+  assert.match(halfMigrated.checkListProblem, /データ行1の列数が6列です（期待: 7列）/);
 
-  // 列数不一致で表全体が無効になるが、ヘッダは新形式なので「列を追加」の案内は誤りになる
-  assert.deepEqual(doc.checks, []);
-  assert.equal(doc.legacyCheckListHeader, false);
+  assert.equal(parseDesignDocContent(FILE_PATH, valid).checkListProblem, undefined);
 });

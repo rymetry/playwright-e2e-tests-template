@@ -546,27 +546,36 @@ function isTableInterruptingBlock(line) {
   );
 }
 
+// 無効な表は理由（reason）を添えて返し、呼び出し側が利用者への案内に使えるようにする
 function parseStrictMarkdownTable(content, expectedHeader) {
   const lines = content.split('\n');
   const headerIndex = lines.findIndex((line) => line.trim() !== '');
   if (headerIndex === -1) {
-    return { valid: false, rows: [] };
+    return { valid: false, rows: [], reason: '表がありません' };
   }
   const delimiterIndex = headerIndex + 1;
   const header = parseMarkdownTableRow(lines[headerIndex] ?? '');
   const delimiter = parseMarkdownTableRow(lines[delimiterIndex] ?? '');
-  const valid =
+  const expectedHeaderRow = `| ${expectedHeader.join(' | ')} |`;
+  const headerMatches =
     header?.length === expectedHeader.length &&
-    header.every((cell, index) => cell === expectedHeader[index]) &&
+    header.every((cell, index) => cell === expectedHeader[index]);
+  if (!headerMatches) {
+    return {
+      valid: false,
+      rows: [],
+      reason: `ヘッダが期待と異なります（期待: ${expectedHeaderRow}、実際: ${(lines[headerIndex] ?? '').trim()}）`,
+    };
+  }
+  const delimiterMatches =
     delimiter?.length === expectedHeader.length &&
     delimiter.every((cell) => /^:?-{3,}:?$/.test(cell));
-
-  if (!valid) {
-    return { valid: false, rows: [] };
+  if (!delimiterMatches) {
+    return { valid: false, rows: [], reason: 'ヘッダ直下の区切り行が列数と一致しません' };
   }
 
   const rows = [];
-  for (const line of lines.slice(delimiterIndex + 1)) {
+  for (const [offset, line] of lines.slice(delimiterIndex + 1).entries()) {
     if (line.trim() === '' || isTableInterruptingBlock(line)) {
       break;
     }
@@ -575,7 +584,11 @@ function parseStrictMarkdownTable(content, expectedHeader) {
       break;
     }
     if (cells.length !== expectedHeader.length) {
-      return { valid: false, rows: [] };
+      return {
+        valid: false,
+        rows: [],
+        reason: `データ行${offset + 1}の列数が${cells.length}列です（期待: ${expectedHeader.length}列）`,
+      };
     }
     rows.push(cells);
   }
@@ -630,11 +643,9 @@ function parseExplorationSummary(section) {
 
 export function parseDesignDocContent(filePath, content) {
   const renderedContent = stripNonRenderedMarkdown(content);
-  const checkListSource = extractCheckList(renderedContent);
-  const checkListTable = parseStrictMarkdownTable(checkListSource, CHECK_LIST_HEADER);
-  // 「分類」列導入前の旧形式ヘッダ。読み取れないDocへ移行案内を出すために検出する
-  const legacyCheckListHeader = /^\s*\|?\s*Check ID\s*\|\s*Execution mode\s*\|/m.test(
-    checkListSource,
+  const checkListTable = parseStrictMarkdownTable(
+    extractCheckList(renderedContent),
+    CHECK_LIST_HEADER,
   );
 
   const metadataTable = parseStrictMarkdownTable(
@@ -673,7 +684,8 @@ export function parseDesignDocContent(filePath, content) {
     parentCaseId,
     checks,
     checkSectionIds: extractCheckSectionIds(renderedContent),
-    legacyCheckListHeader,
+    // Check一覧を読めなかった理由（旧形式ヘッダ等）。読めた場合はundefined
+    checkListProblem: checkListTable.reason,
   };
 }
 
@@ -980,9 +992,9 @@ function main() {
       report(
         docPath,
         'Check一覧からCheckを1件も読み取れませんでした' +
-          (doc.legacyCheckListHeader
-            ? '（Check一覧に「分類」列がありません。README 9.4の移行手順に従い、Check IDの直後に列を追加してください）'
-            : ''),
+          (doc.checkListProblem === undefined
+            ? ''
+            : `（${doc.checkListProblem}。旧形式のDocはREADME 9.4の移行手順に従う）`),
       );
     }
 

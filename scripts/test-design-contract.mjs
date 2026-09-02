@@ -36,6 +36,11 @@ export function formatCheckListHeader() {
   ].join('\n');
 }
 
+// 列名→値のrecordからデータ行を組み立てる。列順はCHECK_LIST_HEADERに追従する
+export function formatCheckListRow(valuesByColumn) {
+  return `| ${CHECK_LIST_HEADER.map((name) => valuesByColumn[name] ?? '').join(' | ')} |`;
+}
+
 const NONE_REASON_PLACEHOLDERS = new Set([
   '理由',
   'TBD',

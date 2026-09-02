@@ -47,7 +47,7 @@ API Execution modeの記入例。
 
 #### 前提・データ
 
-- 開始状態: 認証不要の公開サイト。対象endpointは`GET /docs/intro`、依存する外部サービスはplaywright.dev本体のみ
+- 開始状態: 認証不要の公開サイト。対象endpointは`GET /docs/intro`、依存する外部サービスはplaywright.dev本体のみ。外部公開サイトのため読み取り操作のみ行う
 - request: `GET /docs/intro`（header・bodyなし。既知の有効URLの同値クラス）
 - 動的データ・競合回避: なし（読み取りのみ）
 
@@ -78,14 +78,12 @@ Then:
 - レスポンス本文に`Installation`を含む
 - 副作用: なし（読み取りのみ。永続状態・イベント・通知の確認は対象外）
 
-Accessibility／Visualは対象外（API Checkのため）。
-
 #### 実行契約
 
 | 項目 | 値 |
 |---|---|
 | Playwright Project / API client | `chromium`（`request` fixtureのみを使用し、ブラウザは起動しない。ブラウザ非依存の専用Projectは、スイート間で設定が分岐するまで導入しない〔README 7章〕） |
-| 既定からの逸脱 | なし（外部公開サイトのため読み取り操作のみ行う） |
+| 既定からの逸脱 | なし |
 | 外部依存の模擬 | なし |
 | 後処理 | 既定どおり（状態を変更しない） |
 

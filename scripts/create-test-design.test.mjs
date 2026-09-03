@@ -235,6 +235,20 @@ test('分類の欠落・不正・全角コロン区切りを拒否する', () =>
   );
 });
 
+test('直接入力のCheckはnoneReason省略を許し、非NONEの理由を拒否し、理由をtrimして出力する', () => {
+  const base = { mode: 'PW', tier: 'SMOKE', caseClass: '正常系', explorationMode: 'PLAYWRIGHT_CLI' };
+  assert.doesNotThrow(() => composeTestDesign({ ...BASE_INPUT, checks: [base] }));
+  assert.throws(
+    () => composeTestDesign({ ...BASE_INPUT, checks: [{ ...base, noneReason: '不要' }] }),
+    /Check指定が不正です: 探索不要理由はExploration mode=NONE/,
+  );
+  const markdown = composeTestDesign({
+    ...BASE_INPUT,
+    checks: [{ ...base, explorationMode: 'NONE', noneReason: '  契約仕様だけで確定できるため  ' }],
+  });
+  assert.match(markdown, /対象外（契約仕様だけで確定できるため）/);
+});
+
 test('同じmodeを複数指定するとCheck IDを連番で採番する', () => {
   const markdown = composeTestDesign({
     ...BASE_INPUT,

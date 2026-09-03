@@ -1343,4 +1343,11 @@ test('Check一覧を読めない理由を返す（旧形式ヘッダ・列数不
   assert.match(halfMigrated.checkListProblem, /データ行1の列数が6列です（期待: 7列）/);
 
   assert.equal(parseDesignDocContent(FILE_PATH, valid).checkListProblem, undefined);
+
+  // 区切り行の列数ミスとデータ行なしも理由を返す
+  const badDelimiter = parseDesignDocContent(FILE_PATH, valid.replace(D, '|---|---|'));
+  assert.match(badDelimiter.checkListProblem, /区切り行が列数と一致しません/);
+  const noRows = parseDesignDocContent(FILE_PATH, valid.replace(`${config.row}\n`, ''));
+  assert.deepEqual(noRows.checks, []);
+  assert.equal(noRows.checkListProblem, 'データ行がありません');
 });

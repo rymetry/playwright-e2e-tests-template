@@ -76,8 +76,6 @@ Then:
 - 遷移後のURLが`/docs/intro`に一致する
 - 「Installation」見出しが表示される
 
-Visualは対象外（外部サイトのためVRT基準を維持できない）。
-
 #### 実行契約
 
 | 項目 | 値 |

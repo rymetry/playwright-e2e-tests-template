@@ -104,7 +104,7 @@ function assertSingleLine(label, value) {
   }
 }
 
-// Check指定の検証。CLI引数から作った値も、transaction等のJSONから復元した値も同じ規則で検証する
+// Check指定の検証。CLI引数から作った値も、composeTestDesignを直接呼ぶ入力（test等）も同じ規則で検証する
 function assertValidCheck({ mode, tier, caseClass, explorationMode, noneReason }) {
   if (MODE_CONFIG.get(mode) === undefined) {
     throw new Error(`Check mode「${mode}」はPW/API/CU/MNのいずれかにしてください`);
@@ -248,11 +248,14 @@ export function composeTestDesign(input, options = {}) {
   const sections = [];
 
   for (const [index, check] of input.checks.entries()) {
-    // JSON経由の入力（transaction回復等）もCLIと同じ規則で検証する
+    // parseCheckArgumentを経由しない直接入力もCLIと同じ規則で検証する。
+    // 探索不要理由は検証と同じくtrim済みの値を出力に使う
+    let normalizedCheck;
     try {
       assertValidCheck(check);
+      normalizedCheck = { ...check, noneReason: check.noneReason?.trim() ?? '' };
     } catch (error) {
-      throw new Error(`Check指定が不正です: ${error.message}`);
+      throw new Error(`Check指定が不正です: ${error.message}`, { cause: error });
     }
     const modeConfig = MODE_CONFIG.get(check.mode);
 
@@ -282,7 +285,7 @@ export function composeTestDesign(input, options = {}) {
       SECTION_NUMBER: sectionNumber,
       CHECK_ID: checkId,
       EXPLORATION_MODE: check.explorationMode,
-      ...explorationValues(check, modeConfig),
+      ...explorationValues(normalizedCheck, modeConfig),
     }).trim());
   }
 

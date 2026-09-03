@@ -12,7 +12,8 @@ export const EXECUTION_MODE_BY_CHECK_MODE = new Map([
   ['MN', 'MANUAL'],
 ]);
 
-// test-designs/README.md 3章のTier
+// test-designs/README.md 3章のTier。不正値は「SMOKE以外」としてサイレントにsmoke suiteから
+// 漏れるため、checkerが列挙検証する
 export const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 
 // test-designs/README.md 1.3のCheck分類。Doc上の表示値（日本語）をそのまま契約値とする
@@ -38,7 +39,13 @@ export function formatCheckListHeader() {
 
 // 列名→値のrecordからデータ行を組み立てる。列順はCHECK_LIST_HEADERに追従する
 export function formatCheckListRow(valuesByColumn) {
-  return `| ${CHECK_LIST_HEADER.map((name) => valuesByColumn[name] ?? '').join(' | ')} |`;
+  const cells = CHECK_LIST_HEADER.map((name) => {
+    if (valuesByColumn[name] === undefined) {
+      throw new Error(`Check一覧の列「${name}」の値がありません`);
+    }
+    return valuesByColumn[name];
+  });
+  return `| ${cells.join(' | ')} |`;
 }
 
 const NONE_REASON_PLACEHOLDERS = new Set([

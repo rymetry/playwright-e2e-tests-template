@@ -18,7 +18,7 @@
  * チェックルール一覧:
  *   No.1 Parent Case ID・Check IDが命名規則（<LEVEL>-<AREA>-<SEQ>[-<MODE>-<NN>]）に従っている
  *   No.2 Parent Case ID・Check IDが全Docを通して重複せず、Check一覧と詳細節が対応する
- *   No.3 Check一覧のExecution mode・Status・Tierが正しい値で、Docファイル名がParent Case IDで始まる
+ *   No.3 Check一覧のStatus・Tierが正しい値で、Docファイル名がParent Case IDで始まる（Execution modeはNo.10で検証）
  *   No.4 Check一覧のStatusと、各Checkの「Test Status判定根拠」表の判定が一致する
  *   No.5 PW/API CheckはStatusに応じてspecが存在する（EVALUATING以上=必須、RETIRED=禁止）
  *   No.6 Status=QUARANTINEとテストの@quarantineタグが両方向で一致する
@@ -592,6 +592,9 @@ function parseStrictMarkdownTable(content, expectedHeader) {
     }
     rows.push(cells);
   }
+  if (rows.length === 0) {
+    return { valid: true, rows, reason: 'データ行がありません' };
+  }
   return { valid: true, rows };
 }
 
@@ -684,7 +687,7 @@ export function parseDesignDocContent(filePath, content) {
     parentCaseId,
     checks,
     checkSectionIds: extractCheckSectionIds(renderedContent),
-    // Check一覧を読めなかった理由（旧形式ヘッダ等）。読めた場合はundefined
+    // Check一覧を読めなかった理由（旧形式ヘッダ、列数不一致、データ行なし等）。問題なければundefined
     checkListProblem: checkListTable.reason,
   };
 }
@@ -994,7 +997,11 @@ function main() {
         'Check一覧からCheckを1件も読み取れませんでした' +
           (doc.checkListProblem === undefined
             ? ''
-            : `（${doc.checkListProblem}。旧形式のDocはREADME 9.4の移行手順に従う）`),
+            : `（${doc.checkListProblem}${
+              doc.checkListProblem.startsWith('ヘッダが期待と異なります')
+                ? '。旧形式のDocはREADME 9.4の移行手順に従う'
+                : ''
+            }）`),
       );
     }
 

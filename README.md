@@ -63,7 +63,7 @@ terminal、ログ、Test Design Docへ直接出力しない。
 | `npm run test:headed` | ブラウザ表示付き実行 |
 | `npm run test:ui` | UIモード |
 | `npm run test:report` | 直近のHTMLレポート表示 |
-| `npm run create:test-design -- ...` | [管理ガイド6.0](test-designs/README.md#60-test-design-docの生成)に従い、1シナリオ1ファイルのDesign Docを生成 |
+| `npm run create:test-design -- ...` | [管理ガイド6.0](test-designs/README.md#60-test-design-docの生成)に従い、1 Parent Case 1ファイルのDesign Docを生成（例: `--check PW:SMOKE:正常系:PLAYWRIGHT_CLI`） |
 | `npm run typecheck` | TypeScript型検査 |
 | `npm run check` | Design Doc／spec整合、Design Docの契約・生成test、両hostのskill構造を検査 |
 | `npm run check:skills` | Claude Code／Codexのskill構造だけを検査 |
@@ -132,8 +132,11 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 含む）や、symlinkを除去・dereferenceするarchive／copy手段を使った場合は
 `npm run check:skills` が失敗するため、利用開始前に `npm run check` を実行する。
 
-- 管理ルール（ID命名規則、Tier、Status、昇格条件、スイート拡張方針、
-  コード実装方針〔インライン既定・POMはトリガー駆動〕）: [test-designs/README.md](test-designs/README.md)
+- 入門ガイド（全体像、1つのCheckの一生、分類と技法の考え方、FAQ。規則の正ではない）:
+  [test-designs/GUIDE.md](test-designs/GUIDE.md)
+- 管理ルール（ID命名規則、テスト条件・分類・技法、Tier、Status、昇格条件、
+  スイート拡張方針、コード実装方針〔インライン既定・POMはトリガー駆動〕、
+  既定契約）: [test-designs/README.md](test-designs/README.md)
 - Design Doc生成方法とテンプレート構成: [test-designs/README.md](test-designs/README.md#60-test-design-docの生成)
 - 完成例（PW Check）: [test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md](test-designs/e2e/demo/E2E-DEMO-001-docs-navigation.md) と [e2e/demo/E2E-DEMO-001.spec.ts](e2e/demo/E2E-DEMO-001.spec.ts)
 - 完成例（API Check）: [test-designs/int/demo/INT-DEMO-001-docs-availability.md](test-designs/int/demo/INT-DEMO-001-docs-availability.md) と [e2e/demo/INT-DEMO-001.spec.ts](e2e/demo/INT-DEMO-001.spec.ts)
@@ -142,13 +145,14 @@ Claude Code v2.1.207で認識を確認済み。相対symlinkを保持するGit c
 
 ```
 test-designs/
-  README.md              … 管理ルール（ID命名規則、Status、Qualification、拡張・実装方針）
+  README.md              … 管理ルール（ID命名規則、分類・技法、Status、Qualification、既定契約）
+  GUIDE.md               … 入門ガイド（図、Checkの一生、設計の考え方、FAQ。正はREADME）
   areas.json             … generator／checkerが参照するAreaレジストリの正本
-  templates/             … 共通部とmode別Checkの生成用テンプレート
   e2e/<area>/            … E2EレベルのDesign Doc
   int/<area>/            … IntegrationレベルのDesign Doc
 e2e/<area>/              … Playwright spec（INTも同じtestDir配下）
 skills/                  … 4 skillのhost中立な正本
+  test-design/assets/templates/ … Design Docの共通部とmode別Checkの生成用テンプレート
 .claude/skills/          … 正本への相対symlink（Claude Code discovery）
 .agents/skills/          … 正本への相対symlink（Codex discovery）
 scripts/                 … Design Doc生成・整合チェッカー等の運用スクリプト

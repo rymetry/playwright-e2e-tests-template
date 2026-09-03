@@ -18,17 +18,21 @@ import { fileURLToPath } from 'node:url';
 
 import {
   EXECUTION_MODE_BY_CHECK_MODE,
+  formatCheckListHeader,
+  formatCheckListRow,
   isConcreteNoneReason,
   parseAreaRegistryContent,
+  VALID_CASE_CLASSES,
   VALID_EXPLORATION_MODES_BY_CHECK_MODE,
+  VALID_TIERS,
 } from './test-design-contract.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DEFAULT_TEMPLATE_ROOT = join(ROOT, 'test-designs', 'templates');
+// テンプレート部品はtest-design skillのassets（Agent Skills仕様の推奨配置）に置く
+const DEFAULT_TEMPLATE_ROOT = join(ROOT, 'skills', 'test-design', 'assets', 'templates');
 const DEFAULT_AREA_REGISTRY = join(ROOT, 'test-designs', 'areas.json');
 const PARENT_ID_PATTERN = /^(E2E|INT)-([A-Z]{2,6})-(\d{3})$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
 const PLACEHOLDER_PATTERN = /{{[A-Z0-9_]+}}/g;
 const TRANSACTION_VERSION = 1;
 
@@ -66,16 +70,19 @@ const MODE_CONFIG = new Map([
   }],
 ]);
 
+const CHECK_ARGUMENT_FORMAT = '<MODE>:<TIER>:<分類>:<EXPLORATION_MODE>[:<NONEの具体的理由>]';
+
 const USAGE = `使い方:
   npm run create:test-design -- \\
     --parent-id E2E-DEMO-002 \\
     --title "検索結果を確認する" \\
     --slug search-results \\
-    --check PW:SMOKE:PLAYWRIGHT_CLI
+    --check PW:SMOKE:正常系:PLAYWRIGHT_CLI
 
 Check指定:
-  --check <MODE>:<TIER>:<EXPLORATION_MODE>[:<NONEの具体的理由>]
+  --check ${CHECK_ARGUMENT_FORMAT}
 
+分類は正常系/準正常系/異常系のいずれか（test-designs/README.md 1.3）。
 同じMODEを複数指定するとCheck IDを01、02の順に採番します。
 生成先は test-designs/<level>/<area>/<Parent Case ID>-<slug>.md です。
 同じParent Case IDの既存Docはslugが異なっても上書き・再生成しません。`;
@@ -97,33 +104,48 @@ function assertSingleLine(label, value) {
   }
 }
 
-export function parseCheckArgument(value) {
-  const [mode = '', tier = '', explorationMode = '', ...reasonParts] = value.split(':');
-  const noneReason = reasonParts.join(':').trim();
-  const modeConfig = MODE_CONFIG.get(mode);
-
-  if (modeConfig === undefined) {
+// Check指定の検証。CLI引数から作った値も、composeTestDesignを直接呼ぶ入力（test等）も同じ規則で検証する
+function assertValidCheck({ mode, tier, caseClass, explorationMode, noneReason }) {
+  if (MODE_CONFIG.get(mode) === undefined) {
     throw new Error(`Check mode「${mode}」はPW/API/CU/MNのいずれかにしてください`);
   }
   if (!VALID_TIERS.has(tier)) {
-    throw new Error(`Tier「${tier}」はSMOKE/REGRESSION/EXTENDEDのいずれかにしてください`);
+    throw new Error(`Tier「${tier}」は${[...VALID_TIERS].join('/')}のいずれかにしてください`);
+  }
+  if (!VALID_CASE_CLASSES.has(caseClass)) {
+    throw new Error(
+      `分類「${caseClass}」は${[...VALID_CASE_CLASSES].join('/')}のいずれかにしてください` +
+        `（--check ${CHECK_ARGUMENT_FORMAT}）`,
+    );
   }
   if (!VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(mode)?.has(explorationMode)) {
     throw new Error(
       `Exploration mode「${explorationMode}」はCheck mode=${mode}では使用できません`,
     );
   }
-  if (explorationMode === 'NONE' && !isConcreteNoneReason(noneReason)) {
+  const reason = noneReason?.trim() ?? '';
+  if (explorationMode === 'NONE' && !isConcreteNoneReason(reason)) {
     throw new Error(`Check mode=${mode}でNONEを使う場合は具体的な探索不要理由が必要です`);
   }
-  if (explorationMode !== 'NONE' && noneReason !== '') {
+  if (explorationMode !== 'NONE' && reason !== '') {
     throw new Error('探索不要理由はExploration mode=NONEの場合だけ指定できます');
   }
-  if (noneReason !== '') {
-    assertSingleLine('探索不要理由', noneReason);
+  if (reason !== '') {
+    assertSingleLine('探索不要理由', reason);
   }
+}
 
-  return { mode, tier, explorationMode, noneReason };
+export function parseCheckArgument(value) {
+  const [mode = '', tier = '', caseClass = '', explorationMode = '', ...reasonParts] =
+    value.split(':');
+  // 固定要素を全角コロンで区切ると要素が分かれず後続の検証がすべて誤るため先に検出する。
+  // 理由文（第5要素以降）には全角コロンを含めてよい
+  if ([mode, tier, caseClass, explorationMode].some((part) => part.includes('：'))) {
+    throw new Error(`--checkの区切りは半角コロン「:」にしてください: ${value}`);
+  }
+  const check = { mode, tier, caseClass, explorationMode, noneReason: reasonParts.join(':').trim() };
+  assertValidCheck(check);
+  return check;
 }
 
 export function parseCliArguments(args) {
@@ -226,24 +248,16 @@ export function composeTestDesign(input, options = {}) {
   const sections = [];
 
   for (const [index, check] of input.checks.entries()) {
+    // parseCheckArgumentを経由しない直接入力もCLIと同じ規則で検証する。
+    // 探索不要理由は検証と同じくtrim済みの値を出力に使う
+    let normalizedCheck;
+    try {
+      assertValidCheck(check);
+      normalizedCheck = { ...check, noneReason: check.noneReason?.trim() ?? '' };
+    } catch (error) {
+      throw new Error(`Check指定が不正です: ${error.message}`, { cause: error });
+    }
     const modeConfig = MODE_CONFIG.get(check.mode);
-    if (modeConfig === undefined) {
-      throw new Error(`未対応のCheck modeです: ${check.mode}`);
-    }
-    if (
-      !VALID_TIERS.has(check.tier) ||
-      !VALID_EXPLORATION_MODES_BY_CHECK_MODE.get(check.mode)?.has(check.explorationMode)
-    ) {
-      throw new Error(`Check指定が不正です: ${JSON.stringify(check)}`);
-    }
-    if (check.explorationMode === 'NONE' && !isConcreteNoneReason(check.noneReason)) {
-      throw new Error(`Check mode=${check.mode}でNONEを使う場合は具体的な探索不要理由が必要です`);
-    }
-    if (check.explorationMode === 'NONE') {
-      assertSingleLine('探索不要理由', check.noneReason);
-    } else if (check.noneReason?.trim()) {
-      throw new Error('探索不要理由はExploration mode=NONEの場合だけ指定できます');
-    }
 
     const sequence = (counters.get(check.mode) ?? 0) + 1;
     if (sequence > 99) {
@@ -253,11 +267,15 @@ export function composeTestDesign(input, options = {}) {
     const checkId = `${input.parentId}-${check.mode}-${String(sequence).padStart(2, '0')}`;
     const sectionNumber = `3.${index + 1}`;
     const code = codeOrProcedure(check.mode, area, input.parentId, sectionNumber);
-    rows.push(
-      `| ${checkId} | ${EXECUTION_MODE_BY_CHECK_MODE.get(check.mode)} | ` +
-      `\`${check.explorationMode}\` | ` +
-      `${check.tier} | DRAFT | ${code} |`,
-    );
+    rows.push(formatCheckListRow({
+      'Check ID': checkId,
+      '分類': check.caseClass,
+      'Execution mode': EXECUTION_MODE_BY_CHECK_MODE.get(check.mode),
+      'Exploration mode': `\`${check.explorationMode}\``,
+      'Tier': check.tier,
+      'Status': 'DRAFT',
+      'Code / 手順': code,
+    }));
 
     const checkTemplate = readFileSync(
       join(templateRoot, 'checks', modeConfig.template),
@@ -267,7 +285,7 @@ export function composeTestDesign(input, options = {}) {
       SECTION_NUMBER: sectionNumber,
       CHECK_ID: checkId,
       EXPLORATION_MODE: check.explorationMode,
-      ...explorationValues(check, modeConfig),
+      ...explorationValues(normalizedCheck, modeConfig),
     }).trim());
   }
 
@@ -275,7 +293,7 @@ export function composeTestDesign(input, options = {}) {
     PARENT_CASE_ID: input.parentId,
     TITLE: input.title.trim(),
     LEVEL: level,
-    CHECK_LIST_ROWS: rows.join('\n'),
+    CHECK_LIST_TABLE: [formatCheckListHeader(), ...rows].join('\n'),
     CHECK_SECTIONS: sections.join('\n\n'),
   }).trimEnd() + '\n';
 

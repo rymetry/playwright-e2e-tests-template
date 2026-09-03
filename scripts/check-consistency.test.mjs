@@ -5,13 +5,19 @@ import {
   findDuplicateParentCaseIds,
   findOrphanCheckSectionIds,
   parseDesignDocContent,
+  validateCaseClass,
   validateParentCaseArea,
   validateExplorationSummary,
 } from './check-consistency.mjs';
 import {
   EXECUTION_MODE_BY_CHECK_MODE,
+  formatCheckListHeader,
+  formatCheckListRow,
   parseAreaRegistryContent,
 } from './test-design-contract.mjs';
+
+// Check一覧のheader／delimiterはgeneratorと同じ契約moduleの関数から得る（リテラルを複製しない）
+const [H, D] = formatCheckListHeader().split('\n');
 
 const FILE_PATH = '/tmp/E2E-TST-001-exploration-summary.md';
 const FIELD_NAMES = [
@@ -82,6 +88,7 @@ function buildCheck({
   checkMode,
   executionMode = EXECUTION_MODE_BY_CHECK_MODE.get(checkMode),
   explorationMode,
+  caseClass = '正常系',
   status = 'DRAFT',
   purpose,
   summary = {},
@@ -100,13 +107,21 @@ function buildCheck({
     : '';
 
   return {
-    row: `| ${id} | ${executionMode} | ${explorationMode} | REGRESSION | ${status} | 未実装 |`,
+    row: formatCheckListRow({
+      'Check ID': id,
+      '分類': caseClass,
+      'Execution mode': executionMode,
+      'Exploration mode': explorationMode,
+      'Tier': 'REGRESSION',
+      'Status': status,
+      'Code / 手順': '未実装',
+    }),
     section: `### 3.1 ${id}: テスト対象\n\n#### 探索目的\n\n${resolvedPurpose}\n\n#### 探索サマリ\n\n| 項目 | 値 |\n|---|---|\n${summaryBlock}${duplicateBlock}\n\n#### Test Status判定根拠\n\n| 項目 | 値 |\n|---|---|\n| 判定 | ${status} |`,
   };
 }
 
 function buildDoc(checks) {
-  return `# Test Design Doc\n\n## メタデータ\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |\n\n## 2. Check一覧\n\n| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${checks.map((check) => check.row).join('\n')}\n\n## 3. Check詳細\n\n${checks.map((check) => check.section).join('\n\n')}`;
+  return `# Test Design Doc\n\n## メタデータ\n\n| 項目 | 値 |\n|---|---|\n| Parent Case ID | E2E-TST-001 |\n\n## 2. Check一覧\n\n${H}\n${D}\n${checks.map((check) => check.row).join('\n')}\n\n## 3. Check詳細\n\n${checks.map((check) => check.section).join('\n\n')}`;
 }
 
 function parseChecks(checks) {
@@ -644,7 +659,7 @@ test('placeholderを部分文字列に持つ正当な観測内容とArtifact pat
   });
 });
 
-test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け入れる', async (t) => {
+test('Check一覧は正規のheaderとdelimiterを持つ7列表だけを受け入れる', async (t) => {
   const config = buildCheck({
     id: 'E2E-TST-001-PW-01',
     checkMode: 'PW',
@@ -655,40 +670,40 @@ test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け�
     {
       name: 'headerなし',
       content: validContent.replace(
-        '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n',
+        `${H}\n`,
         '',
       ),
     },
     {
       name: 'delimiterなし',
-      content: validContent.replace('|---|---|---|---|---|---|\n', ''),
+      content: validContent.replace(`${D}\n`, ''),
     },
     {
       name: 'headerとdelimiterの間に空行',
       content: validContent.replace(
-        '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|',
-        '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n\n|---|---|---|---|---|---|',
+        `${H}\n${D}`,
+        `${H}\n\n${D}`,
       ),
     },
     {
       name: 'delimiterとデータ行の間に説明文',
       content: validContent.replace(
-        `|---|---|---|---|---|---|\n${config.row}`,
-        `|---|---|---|---|---|---|\nこれは表の外にある説明です。\n${config.row}`,
+        `${D}\n${config.row}`,
+        `${D}\nこれは表の外にある説明です。\n${config.row}`,
       ),
     },
     {
       name: '4スペースindentされたcode block',
       content: validContent.replace(
-        `| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${config.row}`,
-        `    | Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n    |---|---|---|---|---|---|\n    ${config.row}`,
+        `${H}\n${D}\n${config.row}`,
+        `    ${H}\n    ${D}\n    ${config.row}`,
       ),
     },
     {
-      name: '正常行に7列のdata rowが混在',
+      name: '正常行に8列のdata rowが混在',
       content: validContent.replace(
         config.row,
-        `${config.row}\n| E2E-TST-001-API-01 | API | API_INTEGRATION | REGRESSION | DRAFT | 未実装 | extra |`,
+        `${config.row}\n| E2E-TST-001-API-01 | 正常系 | API | API_INTEGRATION | REGRESSION | DRAFT | 未実装 | extra |`,
       ),
     },
     {
@@ -699,13 +714,13 @@ test('Check一覧は正規のheaderとdelimiterを持つ6列表だけを受け�
       ),
     },
     {
-      name: '7列',
+      name: '8列',
       content: validContent
         .replace(
-          '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |',
-          '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 | Extra |',
+          H,
+          `${H} Extra |`,
         )
-        .replace('|---|---|---|---|---|---|', '|---|---|---|---|---|---|---|')
+        .replace(D, `${D}---|`)
         .replace(config.row, config.row.replace(/\|$/, '| extra |')),
     },
   ];
@@ -726,8 +741,8 @@ test('3スペースまでindentされたCheck一覧を受け入れる', () => {
     explorationMode: 'PLAYWRIGHT_CLI',
   });
   const content = buildDoc([config]).replace(
-    `| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|\n${config.row}`,
-    `   | Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n   |---|---|---|---|---|---|\n   ${config.row}`,
+    `${H}\n${D}\n${config.row}`,
+    `   ${H}\n   ${D}\n   ${config.row}`,
   );
   const doc = parseDesignDocContent(FILE_PATH, content);
 
@@ -742,8 +757,8 @@ test('外側pipeを省略したGFMのCheck一覧を受け入れる', () => {
     explorationMode: 'PLAYWRIGHT_CLI',
   });
   const table = [
-    '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |',
-    '|---|---|---|---|---|---|',
+    H,
+    D,
     config.row,
   ].join('\n');
   const withoutOuterPipes = table
@@ -943,7 +958,7 @@ test('空行なしで始まるblockquoteをGFM表の終了として扱う', () =
   assert.deepEqual(validateExplorationSummary(doc.checks[0]), []);
 });
 
-test('Check一覧の6列行をID形式にかかわらず検査対象へ残す', () => {
+test('Check一覧の7列行をID形式にかかわらず検査対象へ残す', () => {
   const config = buildCheck({
     id: 'E2E-TST-001-PW-01',
     checkMode: 'PW',
@@ -951,7 +966,7 @@ test('Check一覧の6列行をID形式にかかわらず検査対象へ残す', 
   });
   const content = buildDoc([config]).replace(
     config.row,
-    `${config.row}\n| invalid-check-id | PW | PLAYWRIGHT_CLI | REGRESSION | DRAFT | 未実装 |`,
+    `${config.row}\n| invalid-check-id | 正常系 | PW | PLAYWRIGHT_CLI | REGRESSION | DRAFT | 未実装 |`,
   );
   const doc = parseDesignDocContent(FILE_PATH, content);
 
@@ -961,7 +976,7 @@ test('Check一覧の6列行をID形式にかかわらず検査対象へ残す', 
   ]);
 });
 
-test('Check一覧のCode列にescaped pipeを含む有効な6列表を受け入れる', () => {
+test('Check一覧のCode列にescaped pipeを含む有効な7列表を受け入れる', () => {
   const config = buildCheck({
     id: 'E2E-TST-001-PW-01',
     checkMode: 'PW',
@@ -1276,4 +1291,63 @@ test('Parent Case IDが異なるslugのDocで重複する場合を検出する',
     file: second.file,
     firstFile: first.file,
   }]);
+});
+
+test('Check一覧の分類は正常系／準正常系／異常系だけを受け入れる', async (t) => {
+  for (const caseClass of ['正常系', '準正常系', '異常系']) {
+    await t.test(`${caseClass}を受け入れる`, () => {
+      const [check] = parseChecks([buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+        caseClass,
+      })]);
+      assert.equal(check.caseClass, caseClass);
+      assert.deepEqual(validateCaseClass(check), []);
+    });
+  }
+
+  for (const caseClass of ['正常', 'normal', '', '**正常系**', 'NORMAL']) {
+    await t.test(`「${caseClass}」を拒否する`, () => {
+      const [check] = parseChecks([buildCheck({
+        id: 'E2E-TST-001-PW-01',
+        checkMode: 'PW',
+        explorationMode: 'PLAYWRIGHT_CLI',
+        caseClass,
+      })]);
+      assert.match(validateCaseClass(check).join('\n'), /分類「.*」は不正な値です/);
+      // 分類が不正でも探索サマリ等の他ルールは独立に評価できる
+      assert.deepEqual(validateExplorationSummary(check), []);
+    });
+  }
+});
+
+test('Check一覧を読めない理由を返す（旧形式ヘッダ・列数不一致）', () => {
+  const config = buildCheck({
+    id: 'E2E-TST-001-PW-01',
+    checkMode: 'PW',
+    explorationMode: 'PLAYWRIGHT_CLI',
+  });
+  const valid = buildDoc([config]);
+  const legacyHeader = '| Check ID | Execution mode | Exploration mode | Tier | Status | Code / 手順 |\n|---|---|---|---|---|---|';
+  const legacyRow = config.row.replace('| 正常系 ', '');
+
+  const legacyDoc = parseDesignDocContent(FILE_PATH, valid.replace(`${H}\n${D}\n${config.row}`, `${legacyHeader}\n${legacyRow}`));
+  assert.deepEqual(legacyDoc.checks, []);
+  assert.match(legacyDoc.checkListProblem, /ヘッダが期待と異なります（期待: \| Check ID \| 分類 \|/);
+  assert.match(legacyDoc.checkListProblem, /実際: \| Check ID \| Execution mode \|/);
+
+  // ヘッダは新形式でデータ行だけ旧6列の半移行状態は、行の列数不一致として報告する
+  const halfMigrated = parseDesignDocContent(FILE_PATH, valid.replace(config.row, legacyRow));
+  assert.deepEqual(halfMigrated.checks, []);
+  assert.match(halfMigrated.checkListProblem, /データ行1の列数が6列です（期待: 7列）/);
+
+  assert.equal(parseDesignDocContent(FILE_PATH, valid).checkListProblem, undefined);
+
+  // 区切り行の列数ミスとデータ行なしも理由を返す
+  const badDelimiter = parseDesignDocContent(FILE_PATH, valid.replace(D, '|---|---|'));
+  assert.match(badDelimiter.checkListProblem, /区切り行が列数と一致しません/);
+  const noRows = parseDesignDocContent(FILE_PATH, valid.replace(`${config.row}\n`, ''));
+  assert.deepEqual(noRows.checks, []);
+  assert.equal(noRows.checkListProblem, 'データ行がありません');
 });

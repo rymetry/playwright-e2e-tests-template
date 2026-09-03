@@ -12,6 +12,42 @@ export const EXECUTION_MODE_BY_CHECK_MODE = new Map([
   ['MN', 'MANUAL'],
 ]);
 
+// test-designs/README.md 3章のTier。不正値は「SMOKE以外」としてサイレントにsmoke suiteから
+// 漏れるため、checkerが列挙検証する
+export const VALID_TIERS = new Set(['SMOKE', 'REGRESSION', 'EXTENDED']);
+
+// test-designs/README.md 1.3のCheck分類。Doc上の表示値（日本語）をそのまま契約値とする
+export const VALID_CASE_CLASSES = new Set(['正常系', '準正常系', '異常系']);
+
+// Check一覧の列。generatorの出力とcheckerの期待ヘッダを同じ定義から作る
+export const CHECK_LIST_HEADER = [
+  'Check ID',
+  '分類',
+  'Execution mode',
+  'Exploration mode',
+  'Tier',
+  'Status',
+  'Code / 手順',
+];
+
+export function formatCheckListHeader() {
+  return [
+    `| ${CHECK_LIST_HEADER.join(' | ')} |`,
+    `|${CHECK_LIST_HEADER.map(() => '---').join('|')}|`,
+  ].join('\n');
+}
+
+// 列名→値のrecordからデータ行を組み立てる。列順はCHECK_LIST_HEADERに追従する
+export function formatCheckListRow(valuesByColumn) {
+  const cells = CHECK_LIST_HEADER.map((name) => {
+    if (valuesByColumn[name] === undefined) {
+      throw new Error(`Check一覧の列「${name}」の値がありません`);
+    }
+    return valuesByColumn[name];
+  });
+  return `| ${cells.join(' | ')} |`;
+}
+
 const NONE_REASON_PLACEHOLDERS = new Set([
   '理由',
   'TBD',
